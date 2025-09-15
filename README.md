@@ -4,13 +4,12 @@ A server-side Python dashboard for monitoring custom AggLayer networks, built wi
 
 ## Features
 
-- 🏠 **Home Page**: Overview of all configured environments
-- 🔍 **Environment Details**: View all rollups in an environment
-- 📋 **Rollup Details**: Detailed information for each rollup
-- 🌐 **API Endpoints**: RESTful API for programmatic access
+- 🏠 **Home Page**: Overview of environment with all rollups listed
+- 📋 **Rollup Details**: Detailed information for each rollup including certificate data
 - ⚡ **Server-side**: No browser RPC limitations or CORS issues
 - 🎯 **Custom Networks**: Focus on your custom networks only
 - 📦 **Self-contained**: All dependencies included, no external files needed
+- 🔗 **AggLayer Integration**: Displays certificate status and settlement information
 
 ## Setup
 
@@ -24,14 +23,11 @@ A server-side Python dashboard for monitoring custom AggLayer networks, built wi
    ```json
    {
      "rollupManagerContractAddress": "0x6c6c009cC348976dB4A908c92B24433d4F6edA43",
-     "rollupManagerContractDeploymentBlock": 39,
-     "rpcURL": "http://localhost:61444",
-     "aggLayerURL": "http://localhost:63444",
+     "rollupManagerContractDeploymentBlock": 40,
+     "rpcURL": "http://localhost:60444/l1/",
+     "aggLayerURL": "http://localhost:60444/agglayer/",
      "l2rpcs": {
-       "1": {
-         "rpc": "http://localhost:62444",
-         "blockExplorer": "http://localhost:8080"
-       }
+       "1": "http://localhost:60444/l2/"
      }
    }
    ```
@@ -54,22 +50,21 @@ A server-side Python dashboard for monitoring custom AggLayer networks, built wi
 
 5. **Access the Dashboard**:
    - Web UI: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
 
-## API Endpoints
+## Web Interface
 
-- `GET /` - Home page (HTML)
-- `GET /rollups` - All rollups page (HTML)
-- `GET /rollup/{rollup_id}` - Rollup details (HTML)
-- `GET /api/summary` - Environment summary (JSON)
-- `GET /api/rollups` - All rollups (JSON)
-- `GET /api/rollup/{rollup_id}` - Rollup details (JSON)
+The dashboard provides a clean web interface with:
+
+- **`/`** - Home page showing environment overview and all rollups
+- **`/rollup/{rollup_id}`** - Individual rollup details with certificate information and settlement history
+
+All data is rendered server-side for optimal performance and reliability.
 
 ## Architecture
 
-- **FastAPI**: Modern, fast web framework with automatic API docs
+- **FastAPI**: Modern, fast web framework for HTML templating
 - **web3.py**: Ethereum blockchain interactions
-- **Jinja2**: HTML templating engine
+- **Jinja2**: HTML templating engine  
 - **Direct Contract Access**: No browser limitations, direct RPC connections
 - **Local ABIs**: Contract ABIs included locally, fully self-contained
 
@@ -81,7 +76,7 @@ The `config.json` file supports:
 - **rollupManagerContractDeploymentBlock**: Block number where contract was deployed
 - **rpcURL**: Your L1 RPC endpoint 
 - **aggLayerURL**: Your AggLayer endpoint (optional)
-- **l2rpcs**: L2 rollup RPC endpoints and block explorers (by rollup ID)
+- **l2rpcs**: L2 rollup RPC endpoints (by rollup ID) - now simplified format with direct URL strings
 
 ## Advantages over React Dashboard
 
@@ -89,23 +84,25 @@ The `config.json` file supports:
 ✅ **Better Performance**: Direct contract access  
 ✅ **Custom Focus**: Only your networks, no hardcoded defaults  
 ✅ **Simple Deployment**: Single Python process  
-✅ **API Ready**: Built-in REST API  
+✅ **Clean UI**: Focused web interface with consolidated rollup overview  
 ✅ **Reliable**: No browser environment variables or build steps  
 ✅ **Self-contained**: All dependencies and ABIs included locally  
 
 ## Docker Support
 
-```dockerfile
-FROM python:3.11-slim
+Build and run with Docker:
 
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+```bash
+# Build the image
+docker build -t agglayer-dashboard .
 
-COPY . .
-EXPOSE 8000
+# Run the container
+docker run -p 8000:8000 agglayer-dashboard
+```
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+Or use the provided build script:
+```bash
+./build-docker.sh
 ```
 
 ## Development

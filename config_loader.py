@@ -12,7 +12,6 @@ class EnvironmentConfig:
 @dataclass
 class L2Config:
     rpc: str
-    blockExplorer: str
 
 class ConfigLoader:
     def __init__(self, config_path: str = "config.json"):
@@ -45,14 +44,7 @@ class ConfigLoader:
     def get_l2_config(self, rollup_id: str) -> Optional[L2Config]:
         """Get L2 RPC configuration for a specific rollup"""
         l2rpcs = self.config.get("l2rpcs", {})
-        rollup_config = l2rpcs.get(rollup_id)
-        
-        if rollup_config:
-            return L2Config(
-                rpc=rollup_config["rpc"],
-                blockExplorer=rollup_config["blockExplorer"]
-            )
-        return None
+        return l2rpcs.get(rollup_id, None)
 
 # Global config instance
 config_loader = ConfigLoader()

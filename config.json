@@ -4,9 +4,6 @@
   "rpcURL": "http://localhost:60444/l1/",
   "aggLayerURL": "http://localhost:60444/agglayer/",
   "l2rpcs": {
-    "1": {
-      "rpc": "http://localhost:60444/l2/",
-      "blockExplorer": "http://localhost:8080"
-    }
+    "1": "http://localhost:60444/l2/"
   }
 }

@@ -5,8 +5,6 @@
 {% block header %}Rollup {{ rollup.rollupID }} Details{% endblock %}
 
 {% block nav %}
-<a href="/rollups">All Rollups</a>
-<a href="/rollup/{{ rollup.rollupID }}">Rollup {{ rollup.rollupID }}</a>
 {% endblock %}
 
 {% block content %}
@@ -140,6 +138,59 @@
 {% if rollup.certificates %}
 <h2>AggLayer Certificates</h2>
 
+{% if rollup.certificates.epoch_config %}
+<div class="card" style="margin-bottom: 20px; background-color: #f8f9fa;">
+    <h3>⏰ AggLayer Epoch Configuration</h3>
+    <table class="detail-table">
+        <tr>
+            <th>Genesis Block</th>
+            <td>{{ rollup.certificates.epoch_config.genesis_block }}</td>
+        </tr>
+        <tr>
+            <th>Epoch Duration</th>
+            <td>{{ rollup.certificates.epoch_config.epoch_duration }} seconds</td>
+        </tr>
+    </table>
+</div>
+{% endif %}
+
+{% if rollup.certificates.latest_known and rollup.certificates.latest_known != rollup.certificates.settled %}
+<div class="card" style="margin-bottom: 20px; background-color: #e3f2fd;">
+    <h3>📋 Latest Certificate (Any Status)</h3>
+    <p style="color: #666; margin-bottom: 15px;">This shows the most recent certificate regardless of status - may be more recent than settled certificates.</p>
+    <table class="detail-table">
+        <tr>
+            <th>Height</th>
+            <td>{{ rollup.certificates.latest_known.height or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Status</th>
+            <td><span class="badge" style="background-color: {% if rollup.certificates.latest_known.status == 'Settled' %}green{% elif rollup.certificates.latest_known.status == 'Pending' %}orange{% else %}gray{% endif %}; color: white;">{{ rollup.certificates.latest_known.status or 'Unknown' }}</span></td>
+        </tr>
+        <tr>
+            <th>Epoch Number</th>
+            <td>{{ rollup.certificates.latest_known.epoch_number or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Certificate ID</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.latest_known.certificate_id or 'N/A' }}</code></td>
+        </tr>
+        {% if rollup.certificates.latest_known.settlement_datetime %}
+        <tr>
+            <th>Settlement Time</th>
+            <td><strong>{{ rollup.certificates.latest_known.settlement_datetime }}</strong></td>
+        </tr>
+        {% endif %}
+        {% if rollup.certificates.latest_known.settlement_tx_hash %}
+        <tr>
+            <th>Settlement TX Hash</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.latest_known.settlement_tx_hash }}</code></td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+
 {% if rollup.certificates.settled %}
 <div class="card" style="margin-bottom: 20px;">
     <h3>🟢 Latest Settled Certificate</h3>
@@ -154,11 +205,33 @@
         </tr>
         <tr>
             <th>Certificate Index</th>
-            <td>{{ rollup.certificates.settled.certificate_index or 'N/A' }}</td>
+            <td>{% if rollup.certificates.settled.certificate_index is not none %}{{ rollup.certificates.settled.certificate_index }}{% else %}N/A{% endif %}</td>
         </tr>
         <tr>
             <th>Certificate ID</th>
             <td><code style="word-break: break-all;">{{ rollup.certificates.settled.certificate_id or 'N/A' }}</code></td>
+        </tr>
+        {% if rollup.certificates.settled.settlement_datetime %}
+        <tr>
+            <th>Settlement Time</th>
+            <td><strong>{{ rollup.certificates.settled.settlement_datetime }}</strong>{% if rollup.certificates.settled.settlement_relative_time %} <span style="color: #666;">({{ rollup.certificates.settled.settlement_relative_time }})</span>{% endif %}</td>
+        </tr>
+        {% endif %}
+        {% if rollup.certificates.settled.settlement_block_number %}
+        <tr>
+            <th>Settlement Block</th>
+            <td>{{ rollup.certificates.settled.settlement_block_number }}</td>
+        </tr>
+        {% endif %}
+        {% if rollup.certificates.settled.settlement_gas_used %}
+        <tr>
+            <th>Settlement Gas Used</th>
+            <td>{{ '{:,}'.format(rollup.certificates.settled.settlement_gas_used) }} gas</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <th>Settlement TX Hash</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.settled.settlement_tx_hash or 'N/A' }}</code></td>
         </tr>
         <tr>
             <th>Prev Local Exit Root</th>
@@ -168,6 +241,18 @@
             <th>New Local Exit Root</th>
             <td><code style="word-break: break-all;">{{ rollup.certificates.settled.new_local_exit_root or 'N/A' }}</code></td>
         </tr>
+        {% if rollup.certificates.settled.settlement_block_hash %}
+        <tr>
+            <th>Settlement Block Hash</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.settled.settlement_block_hash }}</code></td>
+        </tr>
+        {% endif %}
+        {% if rollup.certificates.settled.settlement_l1_info_root %}
+        <tr>
+            <th>L1 Info Root</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.settled.settlement_l1_info_root }}</code></td>
+        </tr>
+        {% endif %}
     </table>
 </div>
 {% else %}
@@ -177,64 +262,75 @@
 </div>
 {% endif %}
 
-{% if rollup.certificates.pending %}
+{% if rollup.recentSettlements %}
 <div class="card" style="margin-bottom: 20px;">
-    <h3>🟡 Latest Pending Certificate</h3>
+    <h3>📜 Previous Settled Certificate</h3>
+    <p style="color: #666; margin-bottom: 15px;">The most recent certificate settlement before the current one.</p>
+    
+    {% if rollup.recentSettlements|length > 0 %}
+    {% set settlement = rollup.recentSettlements[0] %}
     <table class="detail-table">
         <tr>
             <th>Height</th>
-            <td>{{ rollup.certificates.pending.height or 'N/A' }}</td>
+            <td>{{ settlement.height or 'N/A' }}</td>
         </tr>
         <tr>
             <th>Epoch Number</th>
-            <td>{{ rollup.certificates.pending.epoch_number or 'N/A' }}</td>
+            <td>{{ settlement.epoch_number or 'N/A' }}</td>
         </tr>
         <tr>
             <th>Certificate Index</th>
-            <td>{{ rollup.certificates.pending.certificate_index or 'N/A' }}</td>
+            <td>{% if settlement.certificate_index is not none %}{{ settlement.certificate_index }}{% else %}{{ settlement.certificate_index or 'N/A' }}{% endif %}</td>
         </tr>
         <tr>
             <th>Certificate ID</th>
-            <td><code style="word-break: break-all;">{{ rollup.certificates.pending.certificate_id or 'N/A' }}</code></td>
+            <td>{% if settlement.certificate_id and settlement.certificate_id != 'N/A' %}<code style="word-break: break-all;">{{ settlement.certificate_id }}</code>{% else %}{{ settlement.certificate_id or 'N/A' }}{% endif %}</td>
         </tr>
         <tr>
-            <th>Status</th>
-            <td><span class="badge" style="background-color: orange; color: white;">Pending</span></td>
+            <th>Settlement Time</th>
+            <td><strong>{{ settlement.datetime }}</strong>{% if settlement.relative_time %} <span style="color: #666;">({{ settlement.relative_time }})</span>{% endif %}</td>
+        </tr>
+        <tr>
+            <th>Settlement Block</th>
+            <td>{{ settlement.block_number }}</td>
+        </tr>
+        <tr>
+            <th>Settlement Gas Used</th>
+            <td>{% if settlement.settlement_gas_used %}{{ '{:,}'.format(settlement.settlement_gas_used) }} gas{% else %}N/A{% endif %}</td>
+        </tr>
+        <tr>
+            <th>Settlement TX Hash</th>
+            <td><code style="word-break: break-all;">{{ settlement.transaction_hash }}</code></td>
+        </tr>
+        <tr>
+            <th>Prev Local Exit Root</th>
+            <td><code style="word-break: break-all;">{{ settlement.prev_local_exit_root }}</code></td>
+        </tr>
+        <tr>
+            <th>New Local Exit Root</th>
+            <td><code style="word-break: break-all;">{{ settlement.new_local_exit_root }}</code></td>
+        </tr>
+        <tr>
+            <th>Settlement Block Hash</th>
+            <td>{% if settlement.settlement_block_hash %}<code style="word-break: break-all;">{{ settlement.settlement_block_hash }}</code>{% else %}N/A{% endif %}</td>
+        </tr>
+        <tr>
+            <th>L1 Info Root</th>
+            <td><code style="word-break: break-all;">{{ settlement.l1_info_root }}</code></td>
         </tr>
     </table>
-</div>
-{% else %}
-<div class="card" style="margin-bottom: 20px; background-color: #f5f5f5;">
-    <h3>📋 No Pending Certificates</h3>
-    <p>No pending certificates found for this rollup.</p>
+    {% else %}
+    <p style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">No previous certificate settlements found (this may be the first settlement).</p>
+    {% endif %}
 </div>
 {% endif %}
+
 {% endif %}
 
-{% if rollup.l2Config %}
-<h2>L2 Configuration (from config.json)</h2>
-
-<table class="detail-table">
-    <tr>
-        <th>L2 RPC URL</th>
-        <td><code>{{ rollup.l2Config.rpc }}</code></td>
-    </tr>
-    <tr>
-        <th>Block Explorer</th>
-        <td>
-            {% if rollup.l2Config.blockExplorer.startswith('http') %}
-            <a href="{{ rollup.l2Config.blockExplorer }}" target="_blank">{{ rollup.l2Config.blockExplorer }}</a>
-            {% else %}
-            <code>{{ rollup.l2Config.blockExplorer }}</code>
-            {% endif %}
-        </td>
-    </tr>
-</table>
-{% endif %}
 
 <div style="margin-top: 30px;">
-    <a href="/rollups" style="color: #007bff; text-decoration: none; font-weight: bold;">
-        ← Back to All Rollups
+    <a href="/" style="color: #007bff; text-decoration: none; font-weight: bold;">
+        ← Back to Dashboard
     </a>
 </div>
 {% endblock %}

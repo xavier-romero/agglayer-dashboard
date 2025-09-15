@@ -25,10 +25,12 @@ def get_interactor() -> ContractInteractor:
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    """Home page showing environment summary"""
+    """Home page showing environment summary and all rollups"""
     try:
         contract_interactor = get_interactor()
         summary = contract_interactor.get_environment_summary()
+        rollups = contract_interactor.get_all_rollups()
+        
         
         # Add network contract addresses to home page
         network_addresses = contract_interactor.get_network_addresses()
@@ -36,29 +38,14 @@ async def home(request: Request):
         
         return templates.TemplateResponse("home.html", {
             "request": request,
-            "summary": summary
+            "summary": summary,
+            "rollups": rollups
         })
     except Exception as e:
         return templates.TemplateResponse("error.html", {
             "request": request,
             "error": str(e)
         })
-
-@app.get("/rollups", response_class=HTMLResponse)
-async def rollups_list(request: Request):
-    """Page showing all rollups"""
-    try:
-        contract_interactor = get_interactor()
-        rollups = contract_interactor.get_all_rollups()
-        summary = contract_interactor.get_environment_summary()
-        
-        return templates.TemplateResponse("rollups.html", {
-            "request": request,
-            "rollups": rollups,
-            "summary": summary
-        })
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
 
 @app.get("/rollup/{rollup_id}", response_class=HTMLResponse)
 async def rollup_detail(request: Request, rollup_id: int):
@@ -89,6 +76,19 @@ async def rollup_detail(request: Request, rollup_id: int):
             certificate_data = contract_interactor.get_certificate_data(rollup_id, env_config.aggLayerURL)
             rollup_data["certificates"] = certificate_data
             
+        # Get the single previous settlement by searching backwards from current settlement
+        current_block = None
+        if rollup_data.get("certificates", {}).get("settled", {}).get("settlement_block_number"):
+            current_block = rollup_data["certificates"]["settled"]["settlement_block_number"]
+        
+        if current_block:
+            previous_settlement = contract_interactor.get_previous_settlement_event(
+                rollup_id, current_block, env_config.aggLayerURL
+            )
+            rollup_data["recentSettlements"] = previous_settlement
+        else:
+            rollup_data["recentSettlements"] = []
+            
         # Get L2 config if available
         l2_config = config_loader.get_l2_config(str(rollup_id))
         rollup_data["l2Config"] = l2_config
@@ -100,47 +100,6 @@ async def rollup_detail(request: Request, rollup_id: int):
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-# API Endpoints
-@app.get("/api/summary")
-async def api_summary():
-    """API endpoint to get environment summary"""
-    try:
-        contract_interactor = get_interactor()
-        summary = contract_interactor.get_environment_summary()
-        return summary
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/rollups")
-async def api_rollups():
-    """API endpoint to get all rollups"""
-    try:
-        contract_interactor = get_interactor()
-        rollups = contract_interactor.get_all_rollups()
-        return rollups
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/rollup/{rollup_id}")
-async def api_rollup_detail(rollup_id: int):
-    """API endpoint to get rollup details"""
-    try:
-        contract_interactor = get_interactor()
-        rollup_data = contract_interactor.get_rollup_data(rollup_id)
-        
-        if not rollup_data:
-            raise HTTPException(status_code=404, detail=f"Rollup {rollup_id} not found")
-        
-        rollup_data["rollupID"] = rollup_id
-        
-        # Add additional details
-        if rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
-            rollup_data["networkName"] = contract_interactor.get_network_name(rollup_data["rollupContract"])
-            rollup_data["trustedSequencerURL"] = contract_interactor.get_trusted_sequencer_url(rollup_data["rollupContract"])
-        
-        return rollup_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     print("🚀 Starting FastAPI application...")

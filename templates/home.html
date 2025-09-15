@@ -7,9 +7,9 @@
 
 <div class="card">
     {% if summary.isConnected %}
-    <p class="status-connected">✅ Connected to RPC</p>
+    <p class="status-connected">✅ Connected to L1 RPC</p>
     {% else %}
-    <p class="status-error">❌ RPC Connection Error</p>
+    <p class="status-error">❌ L1 RPC Connection Error</p>
     {% endif %}
     
     {% if summary.error %}
@@ -34,6 +34,39 @@
             <th>Total Rollups</th>
             <td>{{ summary.rollupCount or 0 }}</td>
         </tr>
+        {% if summary.epochConfig %}
+        <tr>
+            <th>Epoch Duration</th>
+            <td>{{ summary.epochConfig.epoch_duration }} seconds</td>
+        </tr>
+        <tr>
+            <th>Genesis Block</th>
+            <td>{{ summary.epochConfig.genesis_block }}</td>
+        </tr>
+        {% endif %}
+        {% if summary.networkAddresses %}
+        <tr style="border-top: 2px solid #eee;">
+            <th colspan="2" style="text-align: center; padding: 10px; background-color: #f8f9fa; font-weight: bold;">Network Contract Addresses</th>
+        </tr>
+        <tr>
+            <th>Bridge Contract</th>
+            <td><code>{{ summary.networkAddresses.bridgeAddress }}</code></td>
+        </tr>
+        <tr>
+            <th>Global Exit Root Manager</th>
+            <td><code>{{ summary.networkAddresses.globalExitRootManager }}</code></td>
+        </tr>
+        <tr>
+            <th>POL Token</th>
+            <td><code>{{ summary.networkAddresses.polAddress }}</code></td>
+        </tr>
+        {% if summary.networkAddresses.aggLayerGatewayAddress %}
+        <tr>
+            <th>AggLayer Gateway</th>
+            <td><code>{{ summary.networkAddresses.aggLayerGatewayAddress }}</code></td>
+        </tr>
+        {% endif %}
+        {% endif %}
     </table>
     {% endif %}
 </div>
@@ -64,40 +97,50 @@
     </div>
 </div>
 
-<div style="margin-top: 30px; text-align: center;">
-    <a href="/rollups" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">
-        🔍 Explore All Rollups
-    </a>
+<h2>All Rollups</h2>
+
+<div class="rollup-grid">
+    {% for rollup in rollups %}
+    <div class="rollup-card {% if rollup.isActive %}rollup-active{% else %}rollup-inactive{% endif %}">
+        <h3>
+            Rollup {{ rollup.rollupID }}
+            <span class="badge badge-{{ rollup.type }}">{{ rollup.type }}</span>
+        </h3>
+        
+        <p><strong>Network:</strong> {{ rollup.networkName or 'Unknown' }}</p>
+        <p><strong>Chain ID:</strong> {{ rollup.chainID }}</p>
+        <p><strong>Status:</strong> 
+            {% if rollup.isActive %}
+            <span class="status-connected">Active</span>
+            {% else %}
+            <span class="status-error">Inactive</span>
+            {% endif %}
+        </p>
+        
+        {% if rollup.rollupContract != "0x0000000000000000000000000000000000000000" %}
+        <p><strong>Contract:</strong> <code>{{ rollup.rollupContract[:10] }}...{{ rollup.rollupContract[-8:] }}</code></p>
+        {% endif %}
+        
+        {% if rollup.trustedSequencerURL %}
+        <p><strong>Sequencer:</strong> <code>{{ rollup.trustedSequencerURL }}</code></p>
+        {% endif %}
+        
+        <div style="margin-top: 15px;">
+            <a href="/rollup/{{ rollup.rollupID }}" 
+               style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                📋 View Details
+            </a>
+        </div>
+    </div>
+    {% endfor %}
 </div>
 
-{% if summary.networkAddresses %}
+{% if not rollups %}
 <div class="card">
-    <h2>Network Contract Addresses</h2>
-    <table class="detail-table">
-        <tr>
-            <th>Rollup Manager</th>
-            <td><code>{{ summary.networkAddresses.rollupManagerAddress }}</code></td>
-        </tr>
-        <tr>
-            <th>Bridge Contract</th>
-            <td><code>{{ summary.networkAddresses.bridgeAddress }}</code></td>
-        </tr>
-        <tr>
-            <th>Global Exit Root Manager</th>
-            <td><code>{{ summary.networkAddresses.globalExitRootManager }}</code></td>
-        </tr>
-        <tr>
-            <th>POL Token</th>
-            <td><code>{{ summary.networkAddresses.polAddress }}</code></td>
-        </tr>
-        {% if summary.networkAddresses.aggLayerGatewayAddress %}
-        <tr>
-            <th>AggLayer Gateway</th>
-            <td><code>{{ summary.networkAddresses.aggLayerGatewayAddress }}</code></td>
-        </tr>
-        {% endif %}
-    </table>
+    <h3>No Rollups Found</h3>
+    <p>This environment has no configured rollups yet.</p>
 </div>
 {% endif %}
+
 {% endif %}
 {% endblock %}
