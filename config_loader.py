@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -47,4 +48,7 @@ class ConfigLoader:
         return l2rpcs.get(rollup_id, None)
 
 # Global config instance
-config_loader = ConfigLoader()
+if os.getenv("CONFIG_FILE"):
+    config_loader = ConfigLoader(os.getenv("CONFIG_FILE"))
+else:
+    config_loader = ConfigLoader()
