@@ -78,8 +78,9 @@ async def rollup_detail(request: Request, rollup_id: int):
             
         # Get the single previous settlement by searching backwards from current settlement
         current_block = None
-        if rollup_data.get("certificates", {}).get("settled", {}).get("settlement_block_number"):
-            current_block = rollup_data["certificates"]["settled"]["settlement_block_number"]
+        settled_cert = rollup_data.get("certificates", {}).get("settled")
+        if settled_cert and settled_cert.get("settlement_block_number"):
+            current_block = settled_cert.get("settlement_block_number")
         
         if current_block:
             previous_settlement = contract_interactor.get_previous_settlement_event(
