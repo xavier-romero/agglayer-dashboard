@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Rollup {{ rollup.rollupID }} - Kurtosis{% endblock %}
+
+{% block header %}Rollup {{ rollup.rollupID }} Details{% endblock %}
+
+{% block nav %}
+<a href="/rollups">All Rollups</a>
+<a href="/rollup/{{ rollup.rollupID }}">Rollup {{ rollup.rollupID }}</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>
+        {{ rollup.networkName or ('Rollup ' + rollup.rollupID|string) }}
+        <span class="badge badge-{{ rollup.type or 'Unknown' }}">{{ rollup.type or 'Unknown' }}</span>
+    </h2>
+</div>
+
+<h2>Basic Information</h2>
+
+<table class="detail-table">
+    <tr>
+        <th>Rollup ID</th>
+        <td>{{ rollup.rollupID }}</td>
+    </tr>
+    <tr>
+        <th>Network Name</th>
+        <td>{{ rollup.networkName or 'Unknown' }}</td>
+    </tr>
+    <tr>
+        <th>Chain ID</th>
+        <td>{{ rollup.chainID }}</td>
+    </tr>
+    <tr>
+        <th>Type</th>
+        <td><span class="badge badge-{{ rollup.type or 'Unknown' }}">{{ rollup.type or 'Unknown' }}</span></td>
+    </tr>
+    <tr>
+        <th>Verifier Type</th>
+        <td>
+            {{ rollup.rollupVerifierTypeFriendly or rollup.rollupVerifierType }}
+            <span style="color: #666; font-size: 0.9em;">({{ rollup.rollupVerifierType }})</span>
+        </td>
+    </tr>
+    <tr>
+        <th>Rollup Type ID</th>
+        <td>{{ rollup.rollupTypeID }}</td>
+    </tr>
+    <tr>
+        <th>Fork ID</th>
+        <td><code>{{ rollup.forkID }}</code></td>
+    </tr>
+    <tr>
+        <th>Last Verified Batch</th>
+        <td>{{ rollup.lastVerifiedBatch }}</td>
+    </tr>
+    {% if rollup.programVKey %}
+    <tr>
+        <th>Program VKey</th>
+        <td><code>{{ rollup.programVKey }}</code></td>
+    </tr>
+    {% endif %}
+</table>
+
+<h2>Contract Information</h2>
+
+<table class="detail-table">
+    <tr>
+        <th>Rollup Contract</th>
+        <td>
+            {% if rollup.rollupContract != "0x0000000000000000000000000000000000000000" %}
+            <code>{{ rollup.rollupContract }}</code>
+            {% else %}
+            <span class="status-error">Not Deployed</span>
+            {% endif %}
+        </td>
+    </tr>
+    {% if rollup.trustedSequencerURL %}
+    <tr>
+        <th>Trusted Sequencer URL</th>
+        <td><code>{{ rollup.trustedSequencerURL }}</code></td>
+    </tr>
+    {% endif %}
+    {% if rollup.trustedSequencer %}
+    <tr>
+        <th>Trusted Sequencer Address</th>
+        <td><code>{{ rollup.trustedSequencer }}</code></td>
+    </tr>
+    {% endif %}
+</table>
+
+<h2>Rollup-Specific Contract Addresses</h2>
+
+<table class="detail-table">
+    {% if rollup.consensusImplementation %}
+    <tr>
+        <th>Consensus Implementation</th>
+        <td>
+            {% if rollup.consensusImplementation != "0x0000000000000000000000000000000000000000" %}
+                <code>{{ rollup.consensusImplementation }}</code>
+            {% else %}
+                <code style="color: #666;">{{ rollup.consensusImplementation }}</code> <span style="color: #666; font-size: 0.9em;">(zero address)</span>
+            {% endif %}
+        </td>
+    </tr>
+    {% endif %}
+    {% if rollup.verifier %}
+    <tr>
+        <th>Verifier Contract</th>
+        <td>
+            {% if rollup.verifier != "0x0000000000000000000000000000000000000000" %}
+                <code>{{ rollup.verifier }}</code>
+            {% else %}
+                <code style="color: #666;">{{ rollup.verifier }}</code> <span style="color: #666; font-size: 0.9em;">(zero address)</span>
+            {% endif %}
+        </td>
+    </tr>
+    {% endif %}
+    {% if rollup.genesis %}
+    <tr>
+        <th>Genesis Block Hash</th>
+        <td><code style="word-break: break-all;">{{ rollup.genesis }}</code></td>
+    </tr>
+    {% endif %}
+    {% if rollup.rollupTypeConsensus and rollup.rollupTypeConsensus != rollup.consensusImplementation and rollup.rollupTypeConsensus != "0x0000000000000000000000000000000000000000" %}
+    <tr>
+        <th>Rollup Type Consensus</th>
+        <td><code>{{ rollup.rollupTypeConsensus }}</code></td>
+    </tr>
+    {% endif %}
+    {% if rollup.rollupTypeVerifier and rollup.rollupTypeVerifier != rollup.verifier and rollup.rollupTypeVerifier != "0x0000000000000000000000000000000000000000" %}
+    <tr>
+        <th>Rollup Type Verifier</th>
+        <td><code>{{ rollup.rollupTypeVerifier }}</code></td>
+    </tr>
+    {% endif %}
+</table>
+
+{% if rollup.certificates %}
+<h2>AggLayer Certificates</h2>
+
+{% if rollup.certificates.settled %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3>🟢 Latest Settled Certificate</h3>
+    <table class="detail-table">
+        <tr>
+            <th>Height</th>
+            <td>{{ rollup.certificates.settled.height or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Epoch Number</th>
+            <td>{{ rollup.certificates.settled.epoch_number or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Certificate Index</th>
+            <td>{{ rollup.certificates.settled.certificate_index or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Certificate ID</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.settled.certificate_id or 'N/A' }}</code></td>
+        </tr>
+        <tr>
+            <th>Prev Local Exit Root</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.settled.prev_local_exit_root or 'N/A' }}</code></td>
+        </tr>
+        <tr>
+            <th>New Local Exit Root</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.settled.new_local_exit_root or 'N/A' }}</code></td>
+        </tr>
+    </table>
+</div>
+{% else %}
+<div class="card" style="margin-bottom: 20px; background-color: #f5f5f5;">
+    <h3>📋 No Settled Certificates</h3>
+    <p>No settled certificates found for this rollup.</p>
+</div>
+{% endif %}
+
+{% if rollup.certificates.pending %}
+<div class="card" style="margin-bottom: 20px;">
+    <h3>🟡 Latest Pending Certificate</h3>
+    <table class="detail-table">
+        <tr>
+            <th>Height</th>
+            <td>{{ rollup.certificates.pending.height or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Epoch Number</th>
+            <td>{{ rollup.certificates.pending.epoch_number or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Certificate Index</th>
+            <td>{{ rollup.certificates.pending.certificate_index or 'N/A' }}</td>
+        </tr>
+        <tr>
+            <th>Certificate ID</th>
+            <td><code style="word-break: break-all;">{{ rollup.certificates.pending.certificate_id or 'N/A' }}</code></td>
+        </tr>
+        <tr>
+            <th>Status</th>
+            <td><span class="badge" style="background-color: orange; color: white;">Pending</span></td>
+        </tr>
+    </table>
+</div>
+{% else %}
+<div class="card" style="margin-bottom: 20px; background-color: #f5f5f5;">
+    <h3>📋 No Pending Certificates</h3>
+    <p>No pending certificates found for this rollup.</p>
+</div>
+{% endif %}
+{% endif %}
+
+{% if rollup.l2Config %}
+<h2>L2 Configuration (from config.json)</h2>
+
+<table class="detail-table">
+    <tr>
+        <th>L2 RPC URL</th>
+        <td><code>{{ rollup.l2Config.rpc }}</code></td>
+    </tr>
+    <tr>
+        <th>Block Explorer</th>
+        <td>
+            {% if rollup.l2Config.blockExplorer.startswith('http') %}
+            <a href="{{ rollup.l2Config.blockExplorer }}" target="_blank">{{ rollup.l2Config.blockExplorer }}</a>
+            {% else %}
+            <code>{{ rollup.l2Config.blockExplorer }}</code>
+            {% endif %}
+        </td>
+    </tr>
+</table>
+{% endif %}
+
+<div style="margin-top: 30px;">
+    <a href="/rollups" style="color: #007bff; text-decoration: none; font-weight: bold;">
+        ← Back to All Rollups
+    </a>
+</div>
+{% endblock %}
