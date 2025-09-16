@@ -40,6 +40,13 @@ class ContractInteractor:
                 abi=self.rollup_manager_abi
             )
             
+            # Cache for static data that doesn't change
+            self._static_cache = {}
+            self._cache_timestamp = {}
+            
+            # Pre-load static data at startup
+            self._preload_static_data()
+            
         except Exception as e:
             print(f"❌ Error initializing ContractInteractor: {e}")
             raise
@@ -64,7 +71,244 @@ class ContractInteractor:
             return 0
     
     def get_network_addresses(self) -> Dict[str, str]:
-        """Get key network contract addresses"""
+        """Get key network contract addresses (cached)"""
+        # Return cached addresses since they don't change
+        return self._static_cache.get('network_addresses', {})
+
+    def get_bridge_details(self, bridge_address: str) -> Dict[str, Any]:
+        """Get additional details from Bridge contract for enhanced UI"""
+        try:
+            # Load bridge ABI and create contract instance
+            bridge_abi = load_abi("PolygonZkEVMBridgeV2.json")
+            if not bridge_abi:
+                return {}  # Return empty dict instead of error to not break page
+            
+            bridge_contract = self.w3.eth.contract(
+                address=bridge_address,
+                abi=bridge_abi
+            )
+            
+            details = {}
+            
+            # Helper function to safely call contract functions
+            def safe_call(func_name, default_value=None):
+                try:
+                    return getattr(bridge_contract.functions, func_name)().call()
+                except Exception as e:
+                    print(f"Warning: Bridge function {func_name} failed: {e}")
+                    return default_value
+            
+            # Helper function for hex conversion
+            def safe_hex_call(func_name):
+                try:
+                    result = getattr(bridge_contract.functions, func_name)().call()
+                    if hasattr(result, 'hex'):
+                        return result.hex()
+                    else:
+                        return hex(result) if isinstance(result, int) else str(result)
+                except Exception as e:
+                    print(f"Warning: Bridge function {func_name} failed: {e}")
+                    return None
+            
+            # Only call functions that we know work from testing
+            details["bridgeVersion"] = safe_call("BRIDGE_VERSION", "Unknown")
+            details["isEmergencyState"] = safe_call("isEmergencyState", False)
+            details["depositCount"] = safe_call("depositCount", 0)
+            details["networkID"] = safe_call("networkID", 0)
+            
+            # Try other basic functions but don't fail if they don't work
+            details["lastUpdatedDepositCount"] = safe_call("lastUpdatedDepositCount", 0)
+            details["gasTokenAddress"] = safe_call("gasTokenAddress", "0x0000000000000000000000000000000000000000")
+            details["gasTokenNetwork"] = safe_call("gasTokenNetwork", 0)
+            details["globalExitRootManager"] = safe_call("globalExitRootManager", None)
+            details["polygonRollupManager"] = safe_call("polygonRollupManager", None)
+            
+            # Optional functions that might not exist
+            details["wethToken"] = safe_call("WETHToken", None)
+            
+            # Hex-based functions
+            details["currentRoot"] = safe_hex_call("getRoot")
+            
+            return details
+            
+        except Exception as e:
+            print(f"Warning: Error getting bridge details: {e}")
+            return {}  # Return empty dict to not break the page
+
+    def get_global_exit_root_details(self, ger_address: str) -> Dict[str, Any]:
+        """Get additional details from Global Exit Root Manager for enhanced UI"""
+        try:
+            # Create a minimal ABI for the Global Exit Root Manager functions
+            ger_abi = [
+                {'inputs': [], 'name': 'version', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'pure', 'type': 'function'},
+                {'inputs': [], 'name': 'getLastGlobalExitRoot', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getRoot', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'bridgeAddress', 'outputs': [{'internalType': 'address', 'name': '', 'type': 'address'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'rollupManager', 'outputs': [{'internalType': 'address', 'name': '', 'type': 'address'}], 'stateMutability': 'view', 'type': 'function'},
+            ]
+            
+            ger_contract = self.w3.eth.contract(address=ger_address, abi=ger_abi)
+            
+            details = {}
+            
+            # Helper function to safely call contract functions
+            def safe_call(func_name, default_value=None):
+                try:
+                    return getattr(ger_contract.functions, func_name)().call()
+                except Exception as e:
+                    print(f"Warning: GER function {func_name} failed: {e}")
+                    return default_value
+            
+            # Helper function for hex conversion
+            def safe_hex_call(func_name):
+                try:
+                    result = getattr(ger_contract.functions, func_name)().call()
+                    if hasattr(result, 'hex'):
+                        return result.hex()
+                    else:
+                        return hex(result) if isinstance(result, int) else str(result)
+                except Exception as e:
+                    print(f"Warning: GER function {func_name} failed: {e}")
+                    return None
+            
+            # Get basic information
+            details["gerVersion"] = safe_call("version", "Unknown")
+            details["bridgeAddress"] = safe_call("bridgeAddress", None)
+            details["rollupManagerAddress"] = safe_call("rollupManager", None)
+            
+            # Get root information
+            details["lastGlobalExitRoot"] = safe_hex_call("getLastGlobalExitRoot")
+            details["l1InfoTreeRoot"] = safe_hex_call("getRoot")
+            
+            return details
+            
+        except Exception as e:
+            print(f"Warning: Error getting Global Exit Root details: {e}")
+            return {}  # Return empty dict to not break the page
+
+    def get_agglayer_gateway_details(self, gateway_address: str) -> Dict[str, Any]:
+        """Get additional details from AggLayer Gateway for enhanced UI"""
+        try:
+            # Create ABI for the AggLayer Gateway functions
+            gateway_abi = [
+                {'inputs': [], 'name': 'version', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'pure', 'type': 'function'},
+                {'inputs': [], 'name': 'getThreshold', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getAggchainSignersCount', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getAggchainSigners', 'outputs': [{'internalType': 'address[]', 'name': '', 'type': 'address[]'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getAggchainMultisigHash', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'},
+            ]
+            
+            gateway_contract = self.w3.eth.contract(address=gateway_address, abi=gateway_abi)
+            
+            details = {}
+            
+            # Helper function to safely call contract functions
+            def safe_call(func_name, default_value=None):
+                try:
+                    return getattr(gateway_contract.functions, func_name)().call()
+                except Exception as e:
+                    print(f"Warning: AggLayer Gateway function {func_name} failed: {e}")
+                    return default_value
+            
+            # Helper function for hex conversion
+            def safe_hex_call(func_name):
+                try:
+                    result = getattr(gateway_contract.functions, func_name)().call()
+                    if hasattr(result, 'hex'):
+                        return result.hex()
+                    else:
+                        return hex(result) if isinstance(result, int) else str(result)
+                except Exception as e:
+                    print(f"Warning: AggLayer Gateway function {func_name} failed: {e}")
+                    return None
+            
+            # Get basic information
+            details["gatewayVersion"] = safe_call("version", "Unknown")
+            
+            # Get multisig information
+            details["threshold"] = safe_call("getThreshold", None)
+            details["signersCount"] = safe_call("getAggchainSignersCount", None)
+            details["signers"] = safe_call("getAggchainSigners", [])
+            details["multisigHash"] = safe_hex_call("getAggchainMultisigHash")
+            
+            return details
+            
+        except Exception as e:
+            print(f"Warning: Error getting AggLayer Gateway details: {e}")
+            return {}  # Return empty dict to not break the page
+    
+    def _find_agglayer_proxy(self, implementation_addr: str) -> str:
+        """Try to find the proxy address for AggLayer Gateway implementation"""
+        try:
+            # EIP-1967 storage slots
+            admin_slot = '0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103'
+            
+            # Known potential proxy addresses (could be expanded with a search algorithm)
+            # For now, we use the address provided by the user as it's managed by the rollup manager
+            potential_proxies = [
+                '0x414e9E227e4b589aF92200508aF5399576530E4e',  # User-provided proxy
+                # Could add more discovery logic here
+            ]
+            
+            rollup_manager_addr = self.rollup_manager.address.lower()
+            
+            for proxy_addr in potential_proxies:
+                try:
+                    admin_storage = self.w3.eth.get_storage_at(proxy_addr, admin_slot)
+                    admin_from_storage = '0x' + admin_storage.hex()[-40:]
+                    
+                    # Check if this proxy is managed by our rollup manager
+                    if admin_from_storage.lower() == rollup_manager_addr:
+                        print(f"Found AggLayer Gateway proxy: {proxy_addr} (managed by RM)")
+                        return proxy_addr
+                        
+                except Exception as e:
+                    print(f"Error checking proxy {proxy_addr}: {e}")
+                    continue
+            
+            print(f"No proxy found for AggLayer Gateway implementation {implementation_addr}")
+            return None
+            
+        except Exception as e:
+            print(f"Error finding AggLayer proxy: {e}")
+            return None
+    
+    def _preload_static_data(self):
+        """Preload static data that doesn't change during app lifetime"""
+        try:
+            print("🔄 Preloading static contract data...")
+            
+            # Cache network addresses (including proxy detection)
+            self._static_cache['network_addresses'] = self._get_network_addresses_uncached()
+            
+            # Cache contract versions
+            addresses = self._static_cache['network_addresses']
+            versions = {}
+            
+            if addresses.get('aggLayerGatewayAddress'):
+                try:
+                    gateway_abi = [{'inputs': [], 'name': 'version', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'pure', 'type': 'function'}]
+                    gateway_contract = self.w3.eth.contract(address=addresses['aggLayerGatewayAddress'], abi=gateway_abi)
+                    versions['gateway'] = gateway_contract.functions.version().call()
+                except:
+                    versions['gateway'] = "Unknown"
+            
+            try:
+                versions['rollupManager'] = self.rollup_manager.functions.ROLLUP_MANAGER_VERSION().call()
+            except:
+                try:
+                    versions['rollupManager'] = self.rollup_manager.functions.version().call()
+                except:
+                    versions['rollupManager'] = "Unknown"
+            
+            self._static_cache['versions'] = versions
+            print(f"✅ Static data preloaded: {len(self._static_cache)} items cached")
+            
+        except Exception as e:
+            print(f"Warning: Error preloading static data: {e}")
+    
+    def _get_network_addresses_uncached(self) -> Dict[str, str]:
+        """Get network addresses without caching (used internally)"""
         try:
             addresses = {}
             
@@ -76,7 +320,12 @@ class ContractInteractor:
             
             # Try to get AggLayer Gateway (might not exist on all networks)
             try:
-                addresses["aggLayerGatewayAddress"] = self.rollup_manager.functions.aggLayerGateway().call()
+                implementation_addr = self.rollup_manager.functions.aggLayerGateway().call()
+                
+                # The rollup manager returns implementation address, but we need the proxy
+                # Try to find the corresponding proxy by checking for proxies managed by this rollup manager
+                proxy_addr = self._find_agglayer_proxy(implementation_addr)
+                addresses["aggLayerGatewayAddress"] = proxy_addr if proxy_addr else implementation_addr
             except:
                 addresses["aggLayerGatewayAddress"] = None
             
@@ -84,6 +333,180 @@ class ContractInteractor:
         except Exception as e:
             print(f"Error getting network addresses: {e}")
             return {}
+
+    def get_rollup_manager_details(self) -> Dict[str, Any]:
+        """Get additional details from RollupManager for enhanced UI"""
+        try:
+            details = {}
+            
+            # Use cached version if available
+            if 'versions' in self._static_cache:
+                details["rollupManagerVersion"] = self._static_cache['versions'].get('rollupManager', 'Unknown')
+            else:
+                # Fallback to direct call
+                try:
+                    details["rollupManagerVersion"] = self.rollup_manager.functions.ROLLUP_MANAGER_VERSION().call()
+                except:
+                    try:
+                        details["rollupManagerVersion"] = self.rollup_manager.functions.version().call()
+                    except:
+                        details["rollupManagerVersion"] = "Unknown"
+            
+            # System status and basic info
+            details["isEmergencyState"] = self.rollup_manager.functions.isEmergencyState().call()
+            details["rollupTypeCount"] = self.rollup_manager.functions.rollupTypeCount().call()
+            
+            # Get rollup information
+            rollup_count = self.get_rollup_count()
+            rollup_details = []
+            for rollup_id in range(1, rollup_count + 1):
+                try:
+                    # Try rollupIDToRollupDataDeserialized first, fallback to rollupIDToRollupDataV2
+                    rollup_raw_data = None
+                    try:
+                        rollup_raw_data = self.rollup_manager.functions.rollupIDToRollupDataDeserialized(rollup_id).call()
+                        data_source = "deserialized"
+                    except:
+                        rollup_raw_data = self.rollup_manager.functions.rollupIDToRollupDataV2(rollup_id).call()
+                        data_source = "v2"
+                    
+                    if rollup_raw_data:
+                        rollup_info = self._parse_rollup_raw_data(rollup_id, rollup_raw_data, data_source)
+                        rollup_details.append(rollup_info)
+                except Exception as e:
+                    print(f"Error getting rollup data for ID {rollup_id}: {e}")
+                    rollup_details.append({
+                        "rollupID": rollup_id,
+                        "error": str(e),
+                        "status": "Error"
+                    })
+            
+            details["rollups"] = rollup_details
+            
+            # Timestamps (convert to human readable if needed)
+            from datetime import datetime
+            
+            last_aggregation = self.rollup_manager.functions.lastAggregationTimestamp().call()
+            details["lastAggregationTimestamp"] = last_aggregation
+            if last_aggregation > 0:
+                details["lastAggregationTime"] = datetime.fromtimestamp(last_aggregation).strftime("%Y-%m-%d %H:%M:%S UTC")
+                details["lastAggregationRelative"] = self.get_relative_time(last_aggregation)
+            else:
+                details["lastAggregationTime"] = "Never"
+                details["lastAggregationRelative"] = "Never"
+            
+            # Emergency state recovery time
+            emergency_recovery = self.rollup_manager.functions.lastDeactivatedEmergencyStateTimestamp().call()
+            details["lastEmergencyRecoveryTimestamp"] = emergency_recovery
+            if emergency_recovery > 0:
+                details["lastEmergencyRecoveryTime"] = datetime.fromtimestamp(emergency_recovery).strftime("%Y-%m-%d %H:%M:%S UTC")
+                details["lastEmergencyRecoveryRelative"] = self.get_relative_time(emergency_recovery)
+            else:
+                details["lastEmergencyRecoveryTime"] = "Never"
+                details["lastEmergencyRecoveryRelative"] = "Never"
+            
+            # Contract version info
+            try:
+                details["version"] = self.rollup_manager.functions.version().call()
+            except:
+                details["version"] = "Unknown"
+                
+            try:
+                details["rollupManagerVersion"] = self.rollup_manager.functions.ROLLUP_MANAGER_VERSION().call()
+            except:
+                details["rollupManagerVersion"] = "Unknown"
+            
+            return details
+        except Exception as e:
+            print(f"Error getting rollup manager details: {e}")
+            return {}
+
+    def _parse_rollup_raw_data(self, rollup_id: int, raw_data: tuple, data_source: str) -> Dict[str, Any]:
+        """Parse raw rollup data from contract into a readable format"""
+        try:
+            # Parse according to rollupIDToRollupDataDeserialized ABI structure:
+            # [0]: rollupContract, [1]: chainID, [2]: verifier, [3]: forkID, [4]: lastLocalExitRoot
+            # [5]: lastBatchSequenced, [6]: lastVerifiedBatch, [7]: _legacyLastPendingState
+            # [8]: _legacyLastPendingStateConsolidated, [9]: lastVerifiedBatchBeforeUpgrade, [10]: rollupTypeID, [11]: rollupCompatibilityID
+            rollup_info = {
+                "rollupID": rollup_id,
+                "dataSource": data_source,
+                "rollupContract": raw_data[0] if len(raw_data) > 0 else "0x0000000000000000000000000000000000000000",
+                "chainID": raw_data[1] if len(raw_data) > 1 else 0,
+                "verifier": raw_data[2] if len(raw_data) > 2 else "0x0000000000000000000000000000000000000000",  # This is the verifier field!
+                "forkID": raw_data[3] if len(raw_data) > 3 else 0,
+                "lastLocalExitRoot": self._format_program_vkey(raw_data[4]) if len(raw_data) > 4 else "",
+                # Skip unused fields: [5-9] various batch and legacy fields
+                "rollupTypeID": raw_data[10] if len(raw_data) > 10 else 0,
+            }
+            
+            # Get rollupVerifierType from correct index based on ABI
+            rollup_info["rollupVerifierType"] = raw_data[11] if len(raw_data) > 11 else 0
+            
+            # Add human-readable verifier type
+            verifier_type = rollup_info["rollupVerifierType"]
+            if verifier_type == 0:
+                rollup_info["rollupVerifierTypeFriendly"] = "zkEVM"
+                rollup_info["type"] = "zkEVM"
+            elif verifier_type == 1:
+                rollup_info["rollupVerifierTypeFriendly"] = "Pessimistic Proof (PP)"
+                rollup_info["type"] = "PP"
+            elif verifier_type == 2:
+                rollup_info["rollupVerifierTypeFriendly"] = "AggLayer Gateway"
+                rollup_info["type"] = "ALGateway"
+            else:
+                rollup_info["rollupVerifierTypeFriendly"] = f"Unknown ({verifier_type})"
+                rollup_info["type"] = "Unknown"
+            
+            # Determine if rollup is active
+            rollup_info["isActive"] = rollup_info["rollupContract"] != "0x0000000000000000000000000000000000000000"
+            
+            # Get rollup type details if available  
+            try:
+                rollup_type_details = self.get_rollup_type_details(rollup_info["rollupTypeID"])
+                # Only add rollup type details that don't conflict with deserialized data
+                if rollup_type_details:
+                    rollup_info["rollupTypeConsensus"] = rollup_type_details.get("rollupTypeConsensus", "")
+                    rollup_info["rollupTypeForkID"] = rollup_type_details.get("rollupTypeForkID", 0)
+                    rollup_info["rollupTypeVerifierType"] = rollup_type_details.get("rollupTypeVerifierType", 0)
+                    rollup_info["obsolete"] = rollup_type_details.get("obsolete", False)
+                    rollup_info["genesis"] = rollup_type_details.get("genesis", "")
+                    rollup_info["rollupTypeProgramVKey"] = rollup_type_details.get("rollupTypeProgramVKey", "")
+            except Exception as e:
+                print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
+            
+            return rollup_info
+            
+        except Exception as e:
+            print(f"Error parsing rollup data for ID {rollup_id}: {e}")
+            return {
+                "rollupID": rollup_id,
+                "dataSource": data_source,
+                "error": str(e),
+                "status": "Parse Error"
+            }
+
+    def _format_program_vkey(self, vkey_data) -> str:
+        """Format program vkey data handling both bytes and int types"""
+        try:
+            if vkey_data is None:
+                return ""
+            elif isinstance(vkey_data, bytes):
+                # Handle bytes type
+                if vkey_data == b'\x00' * len(vkey_data):
+                    return ""
+                return vkey_data.hex()
+            elif isinstance(vkey_data, int):
+                # Handle integer type (convert to hex)
+                if vkey_data == 0:
+                    return ""
+                return hex(vkey_data)[2:]  # Remove '0x' prefix
+            else:
+                # Handle other types by converting to string
+                return str(vkey_data)
+        except Exception as e:
+            print(f"Warning: Could not format program vkey: {e}")
+            return ""
 
     def call_agglayer_rpc(self, url: str, method: str, params: List = None) -> Dict:
         """Make an RPC call to AggLayer endpoint"""
@@ -608,12 +1031,12 @@ class ContractInteractor:
             
             return {
                 "rollupTypeConsensus": rollup_type_data[0],   # Consensus implementation (non-zero address)
-                "verifier": rollup_type_data[1],              # Verifier contract address (zero for this rollup)
+                "verifier": rollup_type_data[1],              # Verifier contract address (zero address is EXPECTED for PP and AggLayer Gateway types)
                 "rollupTypeForkID": rollup_type_data[2],      # Fork ID from type
-                "rollupTypeVerifierType": rollup_type_data[3], # Verifier type
+                "rollupTypeVerifierType": rollup_type_data[3], # Verifier type (0=zkEVM, 1=PP, 2=AggLayer Gateway)
                 "obsolete": rollup_type_data[4],              # Obsolete flag
-                "genesis": rollup_type_data[5].hex() if rollup_type_data[5] and rollup_type_data[5] != b'\x00' * 32 else "",  # Genesis block hash
-                "rollupTypeProgramVKey": rollup_type_data[6].hex() if rollup_type_data[6] and rollup_type_data[6] != b'\x00' * 32 else "",  # Program VKey from type
+                "genesis": self._format_program_vkey(rollup_type_data[5]) if rollup_type_data[5] else "",  # Genesis block hash
+                "rollupTypeProgramVKey": self._format_program_vkey(rollup_type_data[6]) if rollup_type_data[6] else "",  # Program VKey from type
             }
         except Exception as e:
             print(f"Note: Could not get rollup type details for ID {rollup_type_id}: {e}")
@@ -705,6 +1128,24 @@ class ContractInteractor:
                 except Exception as e:
                     print(f"Warning: Could not get epoch configuration: {e}")
             
+            # Get network addresses (cached)
+            network_addresses = self.get_network_addresses()
+            
+            # For now, only get basic info for home page load
+            # Detailed info will be loaded on-demand when sections are expanded
+            basic_info = {
+                "isConnected": self.is_connected(),
+                "rollupCount": rollup_count,
+                "activeCounts": active_counts,
+                "versions": self._static_cache.get('versions', {})
+            }
+            
+            # Get full details (but with addresses cached for speed)
+            rollup_manager_details = self.get_rollup_manager_details()
+            bridge_details = self.get_bridge_details(network_addresses.get("bridgeAddress")) if network_addresses.get("bridgeAddress") else {}
+            ger_details = self.get_global_exit_root_details(network_addresses.get("globalExitRootManager")) if network_addresses.get("globalExitRootManager") else {}
+            agglayer_details = self.get_agglayer_gateway_details(network_addresses.get("aggLayerGatewayAddress")) if network_addresses.get("aggLayerGatewayAddress") else {}
+            
             return {
                 "rollupManagerAddress": self.env_config.rollupManagerContractAddress,
                 "rpcURL": self.env_config.rpcURL,
@@ -712,7 +1153,12 @@ class ContractInteractor:
                 "rollupCount": rollup_count,
                 "activeCounts": active_counts,
                 "isConnected": self.is_connected(),
-                "epochConfig": epoch_config
+                "epochConfig": epoch_config,
+                "rollupManagerDetails": rollup_manager_details,
+                "bridgeDetails": bridge_details,
+                "gerDetails": ger_details,
+                "aggLayerDetails": agglayer_details,
+                "basicInfo": basic_info
             }
         except Exception as e:
             print(f"Error getting environment summary: {e}")
@@ -720,3 +1166,81 @@ class ContractInteractor:
                 "error": str(e),
                 "isConnected": False
             }
+    
+    def _get_basic_rollup_manager_details(self) -> Dict[str, Any]:
+        """Get basic rollup manager info (fast version for initial page load)"""
+        try:
+            # Only load essential info, skip expensive operations like individual rollup details
+            details = {
+                "rollupManagerVersion": self._static_cache.get('versions', {}).get('rollupManager', 'Unknown'),
+                "isEmergencyState": self.rollup_manager.functions.isEmergencyState().call(),
+                "rollupTypeCount": self.rollup_manager.functions.rollupTypeCount().call(),
+            }
+            return details
+        except Exception as e:
+            print(f"Warning: Error getting basic rollup manager details: {e}")
+            return {}
+    
+    def _get_basic_bridge_details(self, bridge_address: str) -> Dict[str, Any]:
+        """Get basic bridge info (fast version for initial page load)"""
+        if not bridge_address:
+            return {}
+        try:
+            # Only get essential info, skip deposit counts and other expensive calls
+            bridge_abi = [
+                {'inputs': [], 'name': 'BRIDGE_VERSION', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'isEmergencyState', 'outputs': [{'internalType': 'bool', 'name': '', 'type': 'bool'}], 'stateMutability': 'view', 'type': 'function'},
+            ]
+            bridge_contract = self.w3.eth.contract(address=bridge_address, abi=bridge_abi)
+            
+            details = {
+                "bridgeVersion": bridge_contract.functions.BRIDGE_VERSION().call(),
+                "isEmergencyState": bridge_contract.functions.isEmergencyState().call(),
+            }
+            return details
+        except Exception as e:
+            print(f"Warning: Error getting basic bridge details: {e}")
+            return {}
+    
+    def _get_basic_ger_details(self, ger_address: str) -> Dict[str, Any]:
+        """Get basic GER info (fast version for initial page load)"""
+        if not ger_address:
+            return {}
+        try:
+            # Only get version info
+            ger_abi = [
+                {'inputs': [], 'name': 'version', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'pure', 'type': 'function'},
+            ]
+            ger_contract = self.w3.eth.contract(address=ger_address, abi=ger_abi)
+            
+            details = {
+                "gerVersion": ger_contract.functions.version().call(),
+            }
+            return details
+        except Exception as e:
+            print(f"Warning: Error getting basic GER details: {e}")
+            return {}
+    
+    def _get_basic_agglayer_details(self, gateway_address: str) -> Dict[str, Any]:
+        """Get basic AggLayer Gateway info (fast version for initial page load)"""
+        if not gateway_address:
+            return {}
+        try:
+            # Only get basic info, skip signers list and expensive calls
+            gateway_abi = [
+                {'inputs': [], 'name': 'version', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'pure', 'type': 'function'},
+                {'inputs': [], 'name': 'getThreshold', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getAggchainSignersCount', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
+            ]
+            gateway_contract = self.w3.eth.contract(address=gateway_address, abi=gateway_abi)
+            
+            details = {
+                "gatewayVersion": gateway_contract.functions.version().call(),
+                "threshold": gateway_contract.functions.getThreshold().call(),
+                "signersCount": gateway_contract.functions.getAggchainSignersCount().call(),
+                # Skip signers list for now - will be loaded when expanded
+            }
+            return details
+        except Exception as e:
+            print(f"Warning: Error getting basic AggLayer Gateway details: {e}")
+            return {}

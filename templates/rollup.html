@@ -110,7 +110,18 @@
             {% if rollup.verifier != "0x0000000000000000000000000000000000000000" %}
                 <code>{{ rollup.verifier }}</code>
             {% else %}
-                <code style="color: #666;">{{ rollup.verifier }}</code> <span style="color: #666; font-size: 0.9em;">(zero address)</span>
+                <code style="color: #666;">{{ rollup.verifier }}</code> 
+                <span style="color: #666; font-size: 0.9em;">
+                    (zero address - 
+                    {% if rollup.rollupVerifierType == 1 %}
+                        expected for Pessimistic Proof rollups
+                    {% elif rollup.rollupVerifierType == 2 %}
+                        expected for AggLayer Gateway rollups  
+                    {% else %}
+                        may indicate missing verifier
+                    {% endif %}
+                    )
+                </span>
             {% endif %}
         </td>
     </tr>

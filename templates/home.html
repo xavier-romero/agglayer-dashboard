@@ -7,7 +7,7 @@
 
 <div class="card">
     {% if summary.isConnected %}
-    <p class="status-connected">✅ Connected to L1 RPC</p>
+    <p class="status-connected">✅ Connected</p>
     {% else %}
     <p class="status-error">❌ L1 RPC Connection Error</p>
     {% endif %}
@@ -17,54 +17,505 @@
     {% else %}
     <table class="detail-table">
         <tr>
-            <th>RPC URL</th>
+            <th>L1 RPC URL</th>
             <td><code>{{ summary.rpcURL }}</code></td>
         </tr>
-        <tr>
-            <th>Rollup Manager</th>
-            <td><code>{{ summary.rollupManagerAddress }}</code></td>
-        </tr>
         {% if summary.aggLayerURL %}
-        <tr>
+        <tr class="agglayer-row">
             <th>AggLayer URL</th>
-            <td><code>{{ summary.aggLayerURL }}</code></td>
-        </tr>
-        {% endif %}
-        <tr>
-            <th>Total Rollups</th>
-            <td>{{ summary.rollupCount or 0 }}</td>
+            <td>
+                <div class="rollup-header" onclick="toggleAggLayerUrlDetails()" style="padding: 8px 0; background: transparent; border: none; justify-content: flex-start; gap: 10px;">
+                    <code>{{ summary.aggLayerURL }}</code>
+                    <span class="expand-arrow" id="expandArrowAggLayerUrl">▼</span>
+                </div>
+            </td>
         </tr>
         {% if summary.epochConfig %}
-        <tr>
-            <th>Epoch Duration</th>
-            <td>{{ summary.epochConfig.epoch_duration }} seconds</td>
+        <tr class="agglayer-url-details" id="aggLayerUrlDetails" style="display: none;">
+            <td colspan="2">
+                <div class="details-container">
+                    <h4 style="margin: 0 0 15px 0; color: #007bff;">⏰ AggLayer Epoch Configuration</h4>
+                    
+                    <div class="details-section">
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Genesis Block:</span>
+                                <span class="detail-value">{{ summary.epochConfig.genesis_block }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Epoch Duration:</span>
+                                <span class="detail-value">{{ summary.epochConfig.epoch_duration }} seconds</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
         </tr>
-        <tr>
-            <th>Genesis Block</th>
-            <td>{{ summary.epochConfig.genesis_block }}</td>
-        </tr>
+        {% endif %}
         {% endif %}
         {% if summary.networkAddresses %}
         <tr style="border-top: 2px solid #eee;">
             <th colspan="2" style="text-align: center; padding: 10px; background-color: #f8f9fa; font-weight: bold;">Network Contract Addresses</th>
         </tr>
-        <tr>
+        <tr class="rollup-manager-row">
+            <th>Rollup Manager</th>
+            <td>
+                <div class="rollup-header" onclick="toggleRollupManagerDetails()" style="padding: 8px 0; background: transparent; border: none; justify-content: flex-start; gap: 10px;">
+                    <code>{{ summary.rollupManagerAddress }}</code>
+                    <span class="expand-arrow" id="expandArrowRollupManager">▼</span>
+                </div>
+            </td>
+        </tr>
+        {% if summary.rollupManagerDetails %}
+        <tr class="rollup-manager-details" id="rollupManagerDetails" style="display: none;">
+            <td colspan="2">
+                <div class="details-container">
+                    <h4 style="margin: 0 0 15px 0; color: #007bff;">📊 Rollup Manager Details</h4>
+                    
+                    <!-- System Status -->
+                    <div class="details-section">
+                        <h5>🚦 System Status</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Emergency State:</span>
+                                <span class="detail-value">
+                                    {% if summary.rollupManagerDetails.isEmergencyState %}
+                                        <span class="status-error">🚨 EMERGENCY</span>
+                                    {% else %}
+                                        <span class="status-connected">✅ Normal</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Manager Version:</span>
+                                <span class="detail-value">{{ summary.rollupManagerDetails.rollupManagerVersion or "Unknown" }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Rollup Type Count:</span>
+                                <span class="detail-value">{{ summary.rollupManagerDetails.rollupTypeCount or 0 }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">POL Token:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.networkAddresses.polAddress }}</code></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timing Information -->
+                    <div class="details-section">
+                        <h5>⏱️ Timing & History</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Last Aggregation:</span>
+                                <span class="detail-value">
+                                    {{ summary.rollupManagerDetails.lastAggregationRelative }}
+                                    {% if summary.rollupManagerDetails.lastAggregationTime != "Never" %}
+                                        <br><small style="color: #666;">{{ summary.rollupManagerDetails.lastAggregationTime }}</small>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Last Emergency Recovery:</span>
+                                <span class="detail-value">
+                                    {{ summary.rollupManagerDetails.lastEmergencyRecoveryRelative }}
+                                    {% if summary.rollupManagerDetails.lastEmergencyRecoveryTime != "Never" %}
+                                        <br><small style="color: #666;">{{ summary.rollupManagerDetails.lastEmergencyRecoveryTime }}</small>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Individual Rollups -->
+                    {% if summary.rollupManagerDetails.rollups and summary.rollupManagerDetails.rollups|length > 0 %}
+                    <div class="details-section">
+                        <h5>🔗 Rollups ({{ rollups|length }})</h5>
+                        <div class="rollup-list">
+                            {% for rollup in rollups %}
+                            <div class="rollup-item">
+                                <div class="rollup-header" onclick="toggleRollupDetails('{{ rollup.rollupID }}')" style="cursor: pointer;">
+                                    <div class="rollup-title">
+                                        <strong>Rollup #{{ rollup.rollupID }}</strong>
+                                        <span style="margin-left: 10px; padding: 2px 6px; background: #e3f2fd; color: #1976d2; border-radius: 12px; font-size: 0.8em;">
+                                            {{ rollup.rollupVerifierTypeFriendly }}
+                                        </span>
+                                        {% if rollup.isActive %}
+                                            <span style="margin-left: 5px; color: #4caf50;">✅</span>
+                                        {% else %}
+                                            <span style="margin-left: 5px; color: #f44336;">❌</span>
+                                        {% endif %}
+                                    </div>
+                                    <span class="expand-arrow" id="arrow-{{ rollup.rollupID }}">▼</span>
+                                </div>
+                                <div class="rollup-details" id="rollupDetails-{{ rollup.rollupID }}" style="display: none;">
+                                    <div class="rollup-details-grid">
+                                        <div class="detail-item">
+                                            <span class="detail-label">Contract:</span>
+                                            <span class="detail-value">
+                                                {% if rollup.rollupContract != "0x0000000000000000000000000000000000000000" %}
+                                                    <code class="full-address">{{ rollup.rollupContract }}</code>
+                                                {% else %}
+                                                    <span style="color: #666;">Not deployed</span>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">L2 RPC URL:</span>
+                                            <span class="detail-value">
+                                                {% if summary.l2rpcs and summary.l2rpcs.get(rollup.rollupID|string) %}
+                                                    <code class="full-address">{{ summary.l2rpcs.get(rollup.rollupID|string) }}</code>
+                                                {% else %}
+                                                    <span style="color: #666;">Not configured</span>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Consensus Implementation:</span>
+                                            <span class="detail-value"><code class="full-address">{{ rollup.rollupTypeConsensus or rollup.consensusImplementation }}</code></span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Network Name:</span>
+                                            <span class="detail-value">
+                                                {% if rollup.networkName %}
+                                                    {{ rollup.networkName }}
+                                                {% else %}
+                                                    <span style="color: #666;">Not available</span>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Sequencer URL:</span>
+                                            <span class="detail-value">
+                                                {% if rollup.trustedSequencerURL %}
+                                                    <code class="full-address">{{ rollup.trustedSequencerURL }}</code>
+                                                {% else %}
+                                                    <span style="color: #666;">Not available</span>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Verifier:</span>
+                                            <span class="detail-value">
+                                                <code class="full-address">{{ rollup.verifier }}</code>
+                                                {% if rollup.verifier == "0x0000000000000000000000000000000000000000" %}
+                                                    {% if rollup.rollupVerifierType == 1 %}
+                                                        <br><small style="color: #666;">✅ Expected: Pessimistic Proof rollups use zero address</small>
+                                                    {% elif rollup.rollupVerifierType == 2 %}
+                                                        <br><small style="color: #666;">✅ Expected: AggLayer Gateway rollups use zero address</small>
+                                                    {% endif %}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Chain ID:</span>
+                                            <span class="detail-value">{{ rollup.chainID }}</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Fork ID:</span>
+                                            <span class="detail-value">{{ rollup.forkID }}</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Type ID:</span>
+                                            <span class="detail-value">{{ rollup.rollupTypeID }}</span>
+                                        </div>
+                                        {% if rollup.rollupTypeProgramVKey %}
+                                        <div class="detail-item program-vkey-item">
+                                            <span class="detail-label">Program VKey:</span>
+                                            <span class="detail-value program-vkey">{{ rollup.rollupTypeProgramVKey }}</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if rollup.lastLocalExitRoot %}
+                                        <div class="detail-item">
+                                            <span class="detail-label">Last Local Exit Root:</span>
+                                            <span class="detail-value"><code>{{ rollup.lastLocalExitRoot }}</code></span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
+                                        <a href="/rollup/{{ rollup.rollupID }}" 
+                                           style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 0.9em;">
+                                            📋 View Details
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endif %}
+        <tr class="bridge-row">
             <th>Bridge Contract</th>
-            <td><code>{{ summary.networkAddresses.bridgeAddress }}</code></td>
+            <td>
+                <div class="rollup-header" onclick="toggleBridgeDetails()" style="padding: 8px 0; background: transparent; border: none; justify-content: flex-start; gap: 10px;">
+                    <code>{{ summary.networkAddresses.bridgeAddress }}</code>
+                    <span class="expand-arrow" id="expandArrowBridge">▼</span>
+                </div>
+            </td>
         </tr>
-        <tr>
+        {% if summary.bridgeDetails and summary.bridgeDetails.keys()|length > 0 %}
+        <tr class="bridge-details" id="bridgeDetails" style="display: none;">
+            <td colspan="2">
+                <div class="details-container">
+                    <h4 style="margin: 0 0 15px 0; color: #007bff;">🌉 Bridge Details</h4>
+                    
+                    <!-- System Status -->
+                    <div class="details-section">
+                        <h5>🚦 Status & Versions</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Emergency State:</span>
+                                <span class="detail-value">
+                                    {% if summary.bridgeDetails.isEmergencyState %}
+                                        <span class="status-error">🚨 EMERGENCY</span>
+                                    {% else %}
+                                        <span class="status-connected">✅ Normal</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Bridge Version:</span>
+                                <span class="detail-value">{{ summary.bridgeDetails.bridgeVersion or "Unknown" }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Network ID:</span>
+                                <span class="detail-value">{{ summary.bridgeDetails.networkID if summary.bridgeDetails.networkID is not none else "Unknown" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Deposits & Activity -->
+                    <div class="details-section">
+                        <h5>💰 Deposits & Activity</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Total Deposits:</span>
+                                <span class="detail-value">{{ "{:,}".format(summary.bridgeDetails.depositCount or 0) }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Last Updated Count:</span>
+                                <span class="detail-value">{{ "{:,}".format(summary.bridgeDetails.lastUpdatedDepositCount or 0) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration -->
+                    <div class="details-section">
+                        <h5>⚙️ Configuration</h5>
+                        <div class="details-grid">
+                            {% if summary.bridgeDetails.bridgeManager %}
+                            <div class="detail-item">
+                                <span class="detail-label">Bridge Manager:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.bridgeDetails.bridgeManager }}</code></span>
+                            </div>
+                            {% endif %}
+                            <div class="detail-item">
+                                <span class="detail-label">Gas Token:</span>
+                                <span class="detail-value">
+                                    {% if summary.bridgeDetails.gasTokenAddress and summary.bridgeDetails.gasTokenAddress != "0x0000000000000000000000000000000000000000" %}
+                                        <code class="full-address">{{ summary.bridgeDetails.gasTokenAddress }}</code>
+                                    {% else %}
+                                        <span style="color: #666;">ETH (Native)</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            {% if summary.bridgeDetails.gasTokenNetwork is not none %}
+                            <div class="detail-item">
+                                <span class="detail-label">Gas Token Network:</span>
+                                <span class="detail-value">{{ summary.bridgeDetails.gasTokenNetwork }}</span>
+                            </div>
+                            {% endif %}
+                            {% if summary.bridgeDetails.wethToken %}
+                            <div class="detail-item">
+                                <span class="detail-label">WETH Token:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.bridgeDetails.wethToken }}</code></span>
+                            </div>
+                            {% endif %}
+                            {% if summary.bridgeDetails.globalExitRootManager %}
+                            <div class="detail-item">
+                                <span class="detail-label">Global Exit Root Manager:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.bridgeDetails.globalExitRootManager }}</code></span>
+                            </div>
+                            {% endif %}
+                            {% if summary.bridgeDetails.polygonRollupManager %}
+                            <div class="detail-item">
+                                <span class="detail-label">Polygon Rollup Manager:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.bridgeDetails.polygonRollupManager }}</code></span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Roots & Hashes -->
+                    {% if summary.bridgeDetails.currentRoot %}
+                    <div class="details-section">
+                        <h5>🌳 Roots & State</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Current Root:</span>
+                                <span class="detail-value"><code class="program-vkey">{{ summary.bridgeDetails.currentRoot }}</code></span>
+                            </div>
+                            {% if summary.bridgeDetails.claimedGlobalIndexHashChain %}
+                            <div class="detail-item">
+                                <span class="detail-label">Claimed Global Index Hash:</span>
+                                <span class="detail-value"><code class="program-vkey">{{ summary.bridgeDetails.claimedGlobalIndexHashChain }}</code></span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endif %}
+        <tr class="ger-row">
             <th>Global Exit Root Manager</th>
-            <td><code>{{ summary.networkAddresses.globalExitRootManager }}</code></td>
+            <td>
+                <div class="rollup-header" onclick="toggleGerDetails()" style="padding: 8px 0; background: transparent; border: none; justify-content: flex-start; gap: 10px;">
+                    <code>{{ summary.networkAddresses.globalExitRootManager }}</code>
+                    <span class="expand-arrow" id="expandArrowGer">▼</span>
+                </div>
+            </td>
         </tr>
-        <tr>
-            <th>POL Token</th>
-            <td><code>{{ summary.networkAddresses.polAddress }}</code></td>
+        {% if summary.gerDetails %}
+        <tr class="ger-details" id="gerDetails" style="display: none;">
+            <td colspan="2">
+                <div class="details-container">
+                    <h4 style="margin: 0 0 15px 0; color: #007bff;">🌳 Global Exit Root Manager Details</h4>
+                    
+                    <!-- System Status -->
+                    <div class="details-section">
+                        <h5>🚦 Status & Version</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">GER Version:</span>
+                                <span class="detail-value">{{ summary.gerDetails.gerVersion if summary.gerDetails.gerVersion is not none else "Unknown" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration -->
+                    <div class="details-section">
+                        <h5>⚙️ Configuration</h5>
+                        <div class="details-grid">
+                            {% if summary.gerDetails.bridgeAddress %}
+                            <div class="detail-item">
+                                <span class="detail-label">Bridge Address:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.gerDetails.bridgeAddress }}</code></span>
+                            </div>
+                            {% endif %}
+                            {% if summary.gerDetails.rollupManagerAddress %}
+                            <div class="detail-item">
+                                <span class="detail-label">Rollup Manager:</span>
+                                <span class="detail-value"><code class="full-address">{{ summary.gerDetails.rollupManagerAddress }}</code></span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Exit Roots -->
+                    <div class="details-section">
+                        <h5>🔗 Exit Roots</h5>
+                        <div class="details-grid">
+                            {% if summary.gerDetails.lastGlobalExitRoot %}
+                            <div class="detail-item">
+                                <span class="detail-label">Last Global Exit Root:</span>
+                                <span class="detail-value"><code class="program-vkey">{{ summary.gerDetails.lastGlobalExitRoot }}</code></span>
+                            </div>
+                            {% endif %}
+                            {% if summary.gerDetails.l1InfoTreeRoot %}
+                            <div class="detail-item">
+                                <span class="detail-label">L1 Info Tree Root:</span>
+                                <span class="detail-value"><code class="program-vkey">{{ summary.gerDetails.l1InfoTreeRoot }}</code></span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </td>
         </tr>
+        {% endif %}
         {% if summary.networkAddresses.aggLayerGatewayAddress %}
-        <tr>
+        <tr class="agglayer-row">
             <th>AggLayer Gateway</th>
-            <td><code>{{ summary.networkAddresses.aggLayerGatewayAddress }}</code></td>
+            <td>
+                <div class="rollup-header" onclick="toggleAggLayerDetails()" style="padding: 8px 0; background: transparent; border: none; justify-content: flex-start; gap: 10px;">
+                    <code>{{ summary.networkAddresses.aggLayerGatewayAddress }}</code>
+                    <span class="expand-arrow" id="expandArrowAggLayer">▼</span>
+                </div>
+            </td>
         </tr>
+        {% if summary.aggLayerDetails %}
+        <tr class="agglayer-details" id="aggLayerDetails" style="display: none;">
+            <td colspan="2">
+                <div class="details-container">
+                    <h4 style="margin: 0 0 15px 0; color: #007bff;">🚪 AggLayer Gateway Details</h4>
+                    
+                    <!-- System Status -->
+                    <div class="details-section">
+                        <h5>🚦 Status & Version</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Gateway Version:</span>
+                                <span class="detail-value">{{ summary.aggLayerDetails.gatewayVersion if summary.aggLayerDetails.gatewayVersion is not none else "Unknown" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Multisig Configuration -->
+                    <div class="details-section">
+                        <h5>👥 Multisig Configuration</h5>
+                        <div class="details-grid">
+                            {% if summary.aggLayerDetails.threshold == 0 and summary.aggLayerDetails.signersCount == 0 %}
+                            <div class="detail-item" style="grid-column: 1 / -1;">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value">
+                                    <span style="color: #ffc107; font-weight: bold;">⚠️ Not Configured</span>
+                                    <br><small style="color: #666;">Multisig signers haven't been set up yet. Someone with AL_MULTISIG_ROLE needs to call updateSignersAndThreshold().</small>
+                                </span>
+                            </div>
+                            {% else %}
+                            <div class="detail-item">
+                                <span class="detail-label">Threshold:</span>
+                                <span class="detail-value">{{ summary.aggLayerDetails.threshold }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signers Count:</span>
+                                <span class="detail-value">{{ summary.aggLayerDetails.signersCount }}</span>
+                            </div>
+                            {% if summary.aggLayerDetails.signers and summary.aggLayerDetails.signers|length > 0 %}
+                            <div class="detail-item" style="grid-column: 1 / -1;">
+                                <span class="detail-label">Signers:</span>
+                                <div class="detail-value">
+                                    {% for signer in summary.aggLayerDetails.signers %}
+                                    <div><code class="full-address">{{ signer }}</code></div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Hash Information -->
+                    {% if summary.aggLayerDetails.multisigHash %}
+                    <div class="details-section">
+                        <h5>🔐 Hash Information</h5>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Multisig Hash:</span>
+                                <span class="detail-value"><code class="program-vkey">{{ summary.aggLayerDetails.multisigHash }}</code></span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endif %}
         {% endif %}
         {% endif %}
     </table>
@@ -97,50 +548,314 @@
     </div>
 </div>
 
-<h2>All Rollups</h2>
 
-<div class="rollup-grid">
-    {% for rollup in rollups %}
-    <div class="rollup-card {% if rollup.isActive %}rollup-active{% else %}rollup-inactive{% endif %}">
-        <h3>
-            Rollup {{ rollup.rollupID }}
-            <span class="badge badge-{{ rollup.type }}">{{ rollup.type }}</span>
-        </h3>
-        
-        <p><strong>Network:</strong> {{ rollup.networkName or 'Unknown' }}</p>
-        <p><strong>Chain ID:</strong> {{ rollup.chainID }}</p>
-        <p><strong>Status:</strong> 
-            {% if rollup.isActive %}
-            <span class="status-connected">Active</span>
-            {% else %}
-            <span class="status-error">Inactive</span>
-            {% endif %}
-        </p>
-        
-        {% if rollup.rollupContract != "0x0000000000000000000000000000000000000000" %}
-        <p><strong>Contract:</strong> <code>{{ rollup.rollupContract[:10] }}...{{ rollup.rollupContract[-8:] }}</code></p>
         {% endif %}
         
-        {% if rollup.trustedSequencerURL %}
-        <p><strong>Sequencer:</strong> <code>{{ rollup.trustedSequencerURL }}</code></p>
-        {% endif %}
-        
-        <div style="margin-top: 15px;">
-            <a href="/rollup/{{ rollup.rollupID }}" 
-               style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
-                📋 View Details
-            </a>
-        </div>
-    </div>
-    {% endfor %}
-</div>
+<style>
+/* Rollup Manager Details Styling */
+.rollup-manager-row .rollup-header {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 4px;
+}
+.rollup-manager-row .rollup-header:hover {
+    background-color: #f8f9fa !important;
+}
 
-{% if not rollups %}
-<div class="card">
-    <h3>No Rollups Found</h3>
-    <p>This environment has no configured rollups yet.</p>
-</div>
-{% endif %}
+/* Bridge Details Styling */
+.bridge-row .rollup-header {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 4px;
+}
+.bridge-row .rollup-header:hover {
+    background-color: #f8f9fa !important;
+}
 
-{% endif %}
+/* Global Exit Root Manager Details Styling */
+.ger-row .rollup-header {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 4px;
+}
+.ger-row .rollup-header:hover {
+    background-color: #f8f9fa !important;
+}
+
+/* AggLayer Gateway Details Styling */
+.agglayer-row .rollup-header {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 4px;
+}
+.agglayer-row .rollup-header:hover {
+    background-color: #f8f9fa !important;
+}
+.details-container {
+    background-color: #f8f9fa;
+    border: 1px solid #e3e6ea;
+    border-radius: 6px;
+    padding: 20px;
+    margin: 10px 0;
+    animation: slideDown 0.3s ease-out;
+}
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding: 0 20px;
+    }
+    to {
+        opacity: 1;
+        max-height: 1000px;
+        padding: 20px;
+    }
+}
+.details-section {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e3e6ea;
+    padding-bottom: 15px;
+}
+.details-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+.details-section h5 {
+    color: #495057;
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+.detail-label {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 600;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.detail-value {
+    font-size: 14px;
+    color: #212529;
+    font-weight: 500;
+}
+.rollup-manager-details {
+    animation: slideDown 0.3s ease-out;
+}
+.rollup-manager-details[style*="display: none"] {
+    animation: slideUp 0.3s ease-out;
+}
+@keyframes slideUp {
+    from {
+        opacity: 1;
+        max-height: 1000px;
+        padding: 20px;
+    }
+    to {
+        opacity: 0;
+        max-height: 0;
+        padding: 0 20px;
+    }
+}
+
+/* Rollup list styling */
+.rollup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.rollup-item {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: white;
+    overflow: hidden;
+}
+.rollup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.rollup-header:hover {
+    background-color: #e9ecef;
+}
+.rollup-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.expand-arrow {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+    color: #6c757d;
+}
+.expand-arrow.expanded {
+    transform: rotate(180deg);
+}
+.rollup-details {
+    padding: 15px;
+    background: #fdfdfe;
+    animation: slideDown 0.3s ease-out;
+}
+.rollup-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+}
+.error-item {
+    grid-column: 1 / -1;
+}
+.detail-value.error {
+    color: #dc3545;
+    font-weight: 500;
+}
+.no-data {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Full address display */
+.full-address {
+    word-break: break-all;
+    font-size: 12px;
+    line-height: 1.3;
+    display: block;
+}
+
+/* Program VKey styling */
+.program-vkey-item {
+    grid-column: 1 / -1;
+}
+.program-vkey {
+    word-break: break-all;
+    font-size: 11px;
+    line-height: 1.4;
+    display: block;
+    background-color: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+    max-height: 100px;
+    overflow-y: auto;
+}
+.vkey-simple {
+    font-size: 16px;
+    font-weight: bold;
+    color: #495057;
+}
+</style>
+
+<script>
+function toggleRollupManagerDetails() {
+    const details = document.getElementById('rollupManagerDetails');
+    const arrow = document.getElementById('expandArrowManager');
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'table-row';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+
+function toggleBridgeDetails() {
+    const details = document.getElementById('bridgeDetails');
+    const arrow = document.getElementById('expandArrowBridge');
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'table-row';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+
+function toggleGerDetails() {
+    const details = document.getElementById('gerDetails');
+    const arrow = document.getElementById('expandArrowGer');
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'table-row';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+
+function toggleAggLayerDetails() {
+    const details = document.getElementById('aggLayerDetails');
+    const arrow = document.getElementById('expandArrowAggLayer');
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'table-row';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+
+function toggleAggLayerUrlDetails() {
+    const details = document.getElementById('aggLayerUrlDetails');
+    const arrow = document.getElementById('expandArrowAggLayerUrl');
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'table-row';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+
+function toggleRollupDetails(rollupId) {
+    const details = document.getElementById('rollupDetails-' + rollupId);
+    const arrow = document.getElementById('arrow-' + rollupId);
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'block';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+</script>
 {% endblock %}

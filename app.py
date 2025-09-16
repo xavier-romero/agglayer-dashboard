@@ -36,6 +36,11 @@ async def home(request: Request):
         network_addresses = contract_interactor.get_network_addresses()
         summary["networkAddresses"] = network_addresses
         
+        # Add L2 RPC configuration to home page
+        env_config = config_loader.get_environment()
+        l2rpcs = config_loader.config.get("l2rpcs", {})
+        summary["l2rpcs"] = l2rpcs
+        
         return templates.TemplateResponse("home.html", {
             "request": request,
             "summary": summary,

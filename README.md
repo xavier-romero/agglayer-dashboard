@@ -23,7 +23,6 @@ A server-side Python dashboard for monitoring custom AggLayer networks, built wi
    ```json
    {
      "rollupManagerContractAddress": "0x6c6c009cC348976dB4A908c92B24433d4F6edA43",
-     "rollupManagerContractDeploymentBlock": 40,
      "rpcURL": "http://localhost:60444/l1/",
      "aggLayerURL": "http://localhost:60444/agglayer/",
      "l2rpcs": {
@@ -73,7 +72,6 @@ All data is rendered server-side for optimal performance and reliability.
 The `config.json` file supports:
 
 - **rollupManagerContractAddress**: Your rollup manager contract address
-- **rollupManagerContractDeploymentBlock**: Block number where contract was deployed
 - **rpcURL**: Your L1 RPC endpoint 
 - **aggLayerURL**: Your AggLayer endpoint (optional)
 - **l2rpcs**: L2 rollup RPC endpoints (by rollup ID) - now simplified format with direct URL strings

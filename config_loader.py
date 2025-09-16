@@ -6,7 +6,6 @@ from dataclasses import dataclass
 @dataclass
 class EnvironmentConfig:
     rollupManagerContractAddress: str
-    rollupManagerContractDeploymentBlock: int
     rpcURL: str
     aggLayerURL: Optional[str] = None
 
@@ -33,7 +32,6 @@ class ConfigLoader:
         try:
             return EnvironmentConfig(
                 rollupManagerContractAddress=self.config["rollupManagerContractAddress"],
-                rollupManagerContractDeploymentBlock=self.config["rollupManagerContractDeploymentBlock"],
                 rpcURL=self.config["rpcURL"],
                 aggLayerURL=self.config.get("aggLayerURL")
             )
