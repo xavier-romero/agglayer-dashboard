@@ -48,6 +48,7 @@
                             </div>
                         </div>
                     </div>
+                    
                 </div>
             </td>
         </tr>
@@ -126,6 +127,31 @@
                         </div>
                     </div>
 
+                    <!-- Cast Commands Legend -->
+                    <div class="cast-commands-section">
+                        <div class="cast-commands-header" onclick="toggleCastCommands('rollupManager')">
+                            📋 Cast Commands <span class="expand-arrow" id="castArrow-rollupManager">▼</span>
+                        </div>
+                        <div class="cast-commands-content" id="castCommands-rollupManager" style="display: none;">
+                            <pre><code># Rollup Manager Details
+# Set environment variables
+export RPC_URL="{{ summary.rpcURL }}"
+export ROLLUP_MANAGER="{{ summary.rollupManagerAddress }}"
+
+# Emergency State
+cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "isEmergencyState()"
+
+# Manager Version
+cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "ROLLUP_MANAGER_VERSION()(string)"
+
+# Rollup Type Count
+cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "rollupTypeCount()"
+
+# POL Token Address
+cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
+                        </div>
+                    </div>
+
                     <!-- Individual Rollups -->
                     {% if summary.rollupManagerDetails.rollups and summary.rollupManagerDetails.rollups|length > 0 %}
                     <div class="details-section">
@@ -168,6 +194,10 @@
                                                     <span style="color: #666;">Not configured</span>
                                                 {% endif %}
                                             </span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="detail-label">Rollup Type ID:</span>
+                                            <span class="detail-value">{{ rollup.rollupTypeID }}</span>
                                         </div>
                                         <div class="detail-item">
                                             <span class="detail-label">Consensus Implementation:</span>
@@ -214,10 +244,6 @@
                                             <span class="detail-label">Fork ID:</span>
                                             <span class="detail-value">{{ rollup.forkID }}</span>
                                         </div>
-                                        <div class="detail-item">
-                                            <span class="detail-label">Type ID:</span>
-                                            <span class="detail-value">{{ rollup.rollupTypeID }}</span>
-                                        </div>
                                         {% if rollup.rollupTypeProgramVKey %}
                                         <div class="detail-item program-vkey-item">
                                             <span class="detail-label">Program VKey:</span>
@@ -230,7 +256,79 @@
                                             <span class="detail-value"><code>{{ rollup.lastLocalExitRoot }}</code></span>
                                         </div>
                                         {% endif %}
+                                        
+                                        <!-- Multisig Information Section -->
+                                        {% if rollup.rollupSignersCount is defined %}
+                                        <div class="detail-item" style="grid-column: 1 / -1;">
+                                            <h6 style="margin: 10px 0 5px 0; color: #555; font-size: 0.9em; border-bottom: 1px solid #eee; padding-bottom: 3px;">👥 Multisig Information</h6>
+                                            <div class="details-grid" style="margin-top: 8px;">
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Signer Count:</span>
+                                                    <span class="detail-value">{{ rollup.rollupSignersCount }}</span>
+                                                </div>
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Threshold:</span>
+                                                    <span class="detail-value">{{ rollup.rollupThreshold }}</span>
+                                                </div>
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Use AgglGW signers:</span>
+                                                    <span class="detail-value">{{ rollup.useDefaultSigners | default("false") }}</span>
+                                                </div>
+                                                {% if rollup.rollupMultisigHash and rollup.rollupMultisigHash != "0x" %}
+                                                <div class="detail-item">
+                                                    <span class="detail-label">Multisig hash:</span>
+                                                    <span class="detail-value"><code class="program-vkey">{{ rollup.rollupMultisigHash }}</code></span>
+                                                </div>
+                                                {% endif %}
+                                                {% if rollup.rollupSigners and rollup.rollupSigners|length > 0 %}
+                                                <div class="detail-item" style="grid-column: 1 / -1;">
+                                                    <span class="detail-label">Signers:</span>
+                                                    <span class="detail-value">
+                                                        {% for signer in rollup.rollupSigners %}
+                                                            <code class="full-address">{{ signer }}</code>{% if not loop.last %}<br>{% endif %}
+                                                        {% endfor %}
+                                                    </span>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
+                                    <!-- Cast Commands Legend -->
+                                    <div class="cast-commands-section">
+                                        <div class="cast-commands-header" onclick="toggleCastCommands('rollup{{ rollup.rollupID }}')">
+                                            📋 Cast Commands <span class="expand-arrow" id="castArrow-rollup{{ rollup.rollupID }}">▼</span>
+                                        </div>
+                                        <div class="cast-commands-content" id="castCommands-rollup{{ rollup.rollupID }}" style="display: none;">
+                                            <pre><code># Individual Rollup Details (Rollup #{{ rollup.rollupID }})
+# Set environment variables
+export RPC_URL="{{ summary.rpcURL }}"
+export ROLLUP_MANAGER="{{ summary.rollupManagerAddress }}"
+export ROLLUP_CONTRACT="{{ rollup.rollupContract }}"
+export ROLLUP_ID={{ rollup.rollupID }}
+
+# Network Name
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "networkName()(string)"
+
+# Trusted Sequencer URL  
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "trustedSequencerURL()(string)"
+
+# Get Full Rollup Data
+cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "rollupIDToRollupDataDeserialized(uint32)(address,uint64,address,uint64,bytes32,uint64,uint64,uint64,uint64,uint64,uint64,uint8)" $ROLLUP_ID
+
+# Chain ID is at index 0 of returned tuple
+# Verifier Address is at index 2 of returned tuple  
+# Fork ID is at index 3 of returned tuple
+
+# Rollup-Level Signers Information (from individual rollup contract)
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainSignersCount()(uint256)"
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getThreshold()(uint256)"
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainSigners()(address[])"
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainMultisigHash()(bytes32)"
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "useDefaultSigners()(bool)"</code></pre>
+                                        </div>
+                                    </div>
+                                    
                                     <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
                                         <a href="/rollup/{{ rollup.rollupID }}" 
                                            style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 0.9em;">
@@ -367,6 +465,47 @@
                         </div>
                     </div>
                     {% endif %}
+                    
+                    <!-- Cast Commands Legend -->
+                    <div class="cast-commands-section">
+                        <div class="cast-commands-header" onclick="toggleCastCommands('bridge')">
+                            📋 Cast Commands <span class="expand-arrow" id="castArrow-bridge">▼</span>
+                        </div>
+                        <div class="cast-commands-content" id="castCommands-bridge" style="display: none;">
+                            <pre><code># Bridge Contract Details
+# Set environment variables
+export RPC_URL="{{ summary.rpcURL }}"
+export ROLLUP_MANAGER="{{ summary.rollupManagerAddress }}"
+
+# Get Bridge Address
+BRIDGE_ADDRESS=$(cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "bridgeAddress()(address)")
+export BRIDGE_ADDRESS
+
+# Bridge Version
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "BRIDGE_VERSION()(string)"
+
+# Emergency State
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "isEmergencyState()(bool)"
+
+# Network ID
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "networkID()(uint32)"
+
+# Deposit Count
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "depositCount()(uint256)"
+
+# Gas Token Address
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "gasTokenAddress()(address)"
+
+# Gas Token Network
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "gasTokenNetwork()(uint32)"
+
+# Global Exit Root Manager
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "globalExitRootManager()(address)"
+
+# Polygon Rollup Manager
+cast call --rpc-url $RPC_URL $BRIDGE_ADDRESS "polygonRollupManager()(address)"</code></pre>
+                        </div>
+                    </div>
                 </div>
             </td>
         </tr>
@@ -435,6 +574,38 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Cast Commands Legend -->
+                <div class="cast-commands-section">
+                    <div class="cast-commands-header" onclick="toggleCastCommands('gerDetails')">
+                        📋 Cast Commands <span class="expand-arrow" id="castArrow-gerDetails">▼</span>
+                    </div>
+                    <div class="cast-commands-content" id="castCommands-gerDetails" style="display: none;">
+                        <pre><code># Global Exit Root Manager Details
+# Set environment variables
+export RPC_URL="{{ summary.rpcURL }}"
+export ROLLUP_MANAGER="{{ summary.rollupManagerAddress }}"
+
+# Get Global Exit Root Manager Address
+GER_ADDRESS=$(cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "globalExitRootManager()(address)")
+export GER_ADDRESS
+
+# GER Version
+cast call --rpc-url $RPC_URL $GER_ADDRESS "version()(string)"
+
+# Bridge Address (from GER contract)
+cast call --rpc-url $RPC_URL $GER_ADDRESS "bridgeAddress()(address)"
+
+# Rollup Manager Address (from GER contract)
+cast call --rpc-url $RPC_URL $GER_ADDRESS "rollupManager()(address)"
+
+# Last Global Exit Root
+cast call --rpc-url $RPC_URL $GER_ADDRESS "getLastGlobalExitRoot()(bytes32)"
+
+# L1 Info Tree Root
+cast call --rpc-url $RPC_URL $GER_ADDRESS "getRoot()(bytes32)"</code></pre>
+                    </div>
+                </div>
             </td>
         </tr>
         {% endif %}
@@ -469,15 +640,6 @@
                     <div class="details-section">
                         <h5>👥 Multisig Configuration</h5>
                         <div class="details-grid">
-                            {% if summary.aggLayerDetails.threshold == 0 and summary.aggLayerDetails.signersCount == 0 %}
-                            <div class="detail-item" style="grid-column: 1 / -1;">
-                                <span class="detail-label">Status:</span>
-                                <span class="detail-value">
-                                    <span style="color: #ffc107; font-weight: bold;">⚠️ Not Configured</span>
-                                    <br><small style="color: #666;">Multisig signers haven't been set up yet. Someone with AL_MULTISIG_ROLE needs to call updateSignersAndThreshold().</small>
-                                </span>
-                            </div>
-                            {% else %}
                             <div class="detail-item">
                                 <span class="detail-label">Threshold:</span>
                                 <span class="detail-value">{{ summary.aggLayerDetails.threshold }}</span>
@@ -486,17 +648,18 @@
                                 <span class="detail-label">Signers Count:</span>
                                 <span class="detail-value">{{ summary.aggLayerDetails.signersCount }}</span>
                             </div>
-                            {% if summary.aggLayerDetails.signers and summary.aggLayerDetails.signers|length > 0 %}
                             <div class="detail-item" style="grid-column: 1 / -1;">
                                 <span class="detail-label">Signers:</span>
                                 <div class="detail-value">
-                                    {% for signer in summary.aggLayerDetails.signers %}
-                                    <div><code class="full-address">{{ signer }}</code></div>
-                                    {% endfor %}
+                                    {% if summary.aggLayerDetails.signers and summary.aggLayerDetails.signers|length > 0 %}
+                                        {% for signer in summary.aggLayerDetails.signers %}
+                                        <div><code class="full-address">{{ signer }}</code></div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span style="color: #666;">[] (empty array)</span>
+                                    {% endif %}
                                 </div>
                             </div>
-                            {% endif %}
-                            {% endif %}
                         </div>
                     </div>
                     
@@ -512,6 +675,35 @@
                         </div>
                     </div>
                     {% endif %}
+                    
+                    <!-- Cast Commands Legend -->
+                    <div class="cast-commands-section">
+                        <div class="cast-commands-header" onclick="toggleCastCommands('aggLayerGateway')">
+                            📋 Cast Commands <span class="expand-arrow" id="castArrow-aggLayerGateway">▼</span>
+                        </div>
+                        <div class="cast-commands-content" id="castCommands-aggLayerGateway" style="display: none;">
+                            <pre><code># AggLayer Gateway Details
+# Set environment variables
+export RPC_URL="{{ summary.rpcURL }}"
+export ROLLUP_MANAGER="{{ summary.rollupManagerAddress }}"
+
+# Get AggLayer Gateway Address (returns correct proxy address)
+AGGLAYER_GATEWAY=$(cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "aggLayerGateway()(address)")
+export AGGLAYER_GATEWAY
+
+# Signers Count
+cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainSignersCount()(uint256)"
+
+# Required Threshold  
+cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getThreshold()(uint256)"
+
+# Get All Signers
+cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainSigners()(address[])"
+
+# Get Multisig Hash
+cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainMultisigHash()(bytes32)"</code></pre>
+                        </div>
+                    </div>
                 </div>
             </td>
         </tr>
@@ -552,6 +744,55 @@
         {% endif %}
         
 <style>
+/* Cast Commands Styling */
+.cast-commands-section {
+    margin-top: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #fafafa;
+}
+
+.cast-commands-header {
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 6px 6px 0 0;
+}
+
+.cast-commands-header:hover {
+    background-color: #e9ecef;
+}
+
+.cast-commands-content {
+    padding: 0;
+}
+
+.cast-commands-content pre {
+    margin: 0;
+    padding: 15px;
+    background-color: #1e1e1e;
+    color: #f8f8f2;
+    border-radius: 0 0 6px 6px;
+    overflow-x: auto;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.cast-commands-content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+}
+
 /* Rollup Manager Details Styling */
 .rollup-manager-row .rollup-header {
     cursor: pointer;
@@ -834,6 +1075,21 @@ function toggleAggLayerUrlDetails() {
     
     if (details.style.display === 'none' || details.style.display === '') {
         details.style.display = 'table-row';
+        arrow.classList.add('expanded');
+        arrow.innerHTML = '▲';
+    } else {
+        details.style.display = 'none';
+        arrow.classList.remove('expanded');
+        arrow.innerHTML = '▼';
+    }
+}
+
+function toggleCastCommands(sectionId) {
+    const details = document.getElementById('castCommands-' + sectionId);
+    const arrow = document.getElementById('castArrow-' + sectionId);
+    
+    if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'block';
         arrow.classList.add('expanded');
         arrow.innerHTML = '▲';
     } else {

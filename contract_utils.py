@@ -1,10 +1,23 @@
 import json
 import asyncio
 import requests
+import logging
+import time
+from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 from web3 import Web3
 from web3.providers import HTTPProvider
 from config_loader import EnvironmentConfig, L2Config
+
+# Set up file logging for debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/tmp/rollup_debug.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Load ABI files
 def load_abi(filename: str) -> List[Dict]:
@@ -320,12 +333,8 @@ class ContractInteractor:
             
             # Try to get AggLayer Gateway (might not exist on all networks)
             try:
-                implementation_addr = self.rollup_manager.functions.aggLayerGateway().call()
-                
-                # The rollup manager returns implementation address, but we need the proxy
-                # Try to find the corresponding proxy by checking for proxies managed by this rollup manager
-                proxy_addr = self._find_agglayer_proxy(implementation_addr)
-                addresses["aggLayerGatewayAddress"] = proxy_addr if proxy_addr else implementation_addr
+                # Use the address directly returned by rollup manager (as clarified by user)
+                addresses["aggLayerGatewayAddress"] = self.rollup_manager.functions.aggLayerGateway().call()
             except:
                 addresses["aggLayerGatewayAddress"] = None
             
@@ -475,6 +484,41 @@ class ContractInteractor:
             except Exception as e:
                 print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
             
+            # Get rollup-level signers information (for AggLayer Gateway rollups)
+            logger.info(f"🔍 STEP: About to fetch rollup signers for rollup {rollup_id}")
+            logger.info(f"🔍 ROLLUP_INFO: isActive={rollup_info['isActive']}, rollupContract={rollup_info['rollupContract']}")
+            try:
+                if rollup_info["isActive"] and rollup_info["rollupContract"] != "0x0000000000000000000000000000000000000000":
+                    logger.info(f"🔍 CONDITION PASSED: Fetching rollup signers for rollup {rollup_id}, contract: {rollup_info['rollupContract']}")
+                    print(f"🔍 Fetching rollup signers for rollup {rollup_id}, contract: {rollup_info['rollupContract']}")
+                    rollup_signers_info = self._get_rollup_signers_info(rollup_info["rollupContract"])
+                    logger.info(f"📊 SIGNERS RESULT: Rollup {rollup_id} signers result: {rollup_signers_info}")
+                    print(f"📊 Rollup {rollup_id} signers result: {rollup_signers_info}")
+                    # Always update rollup_info with signers info (even if values are 0)
+                    if rollup_signers_info is not None:
+                        logger.info(f"✅ UPDATING: Adding signers info to rollup_info for rollup {rollup_id}")
+                        rollup_info.update(rollup_signers_info)
+                        logger.info(f"✅ UPDATED: rollup_info after update: rollupSignersCount={rollup_info.get('rollupSignersCount', 'NOT_SET')}")
+                        print(f"✅ Rollup {rollup_id} signers info added to rollup_info")
+                    else:
+                        logger.error(f"❌ ERROR: Rollup {rollup_id} signers info was None")
+                        print(f"❌ Rollup {rollup_id} signers info was None")
+                else:
+                    logger.info(f"⏭️ SKIPPED: Rollup {rollup_id} signers fetch - condition not met (isActive={rollup_info['isActive']}, contract={rollup_info['rollupContract']})")
+            except Exception as e:
+                logger.error(f"🚨 EXCEPTION: Could not fetch rollup signers info for rollup {rollup_id}: {e}")
+                print(f"Warning: Could not fetch rollup signers info for rollup {rollup_id}: {e}")
+                # Set default values for signers info
+                rollup_info["rollupSignersCount"] = 0
+                rollup_info["rollupThreshold"] = 0
+                rollup_info["rollupSigners"] = []
+                rollup_info["rollupMultisigHash"] = ""
+                logger.info(f"🔧 DEFAULT VALUES SET: rollup {rollup_id} got default signers values")
+            except Exception as e:
+                logger.error(f"🚨 EXCEPTION: Could not get rollup type details for rollup {rollup_id}: {e}")
+                print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
+            
+            logger.info(f"🏁 RETURNING: rollup_info for rollup {rollup_id} with rollupSignersCount={rollup_info.get('rollupSignersCount', 'NOT_SET')}")
             return rollup_info
             
         except Exception as e:
@@ -507,6 +551,57 @@ class ContractInteractor:
         except Exception as e:
             print(f"Warning: Could not format program vkey: {e}")
             return ""
+    
+    def _get_rollup_signers_info(self, rollup_contract_address: str) -> Dict[str, Any]:
+        """Get signers information from individual rollup contract"""
+        try:
+            # ABI for rollup-level signers functions
+            rollup_signers_abi = [
+                {'inputs': [], 'name': 'getAggchainSignersCount', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getThreshold', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getAggchainSigners', 'outputs': [{'internalType': 'address[]', 'name': '', 'type': 'address[]'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'getAggchainMultisigHash', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'useDefaultSigners', 'outputs': [{'internalType': 'bool', 'name': '', 'type': 'bool'}], 'stateMutability': 'view', 'type': 'function'}
+            ]
+            
+            rollup_contract = self.w3.eth.contract(
+                address=rollup_contract_address,
+                abi=rollup_signers_abi
+            )
+            
+            def safe_call(func, default_value):
+                """Safely call contract function with fallback"""
+                try:
+                    return func()
+                except:
+                    return default_value
+            
+            # Get rollup-level signers info
+            signers_count = safe_call(lambda: rollup_contract.functions.getAggchainSignersCount().call(), 0)
+            threshold = safe_call(lambda: rollup_contract.functions.getThreshold().call(), 0)
+            signers_list = safe_call(lambda: rollup_contract.functions.getAggchainSigners().call(), [])
+            multisig_hash = safe_call(lambda: rollup_contract.functions.getAggchainMultisigHash().call().hex() if rollup_contract.functions.getAggchainMultisigHash().call() else "0x", "0x")
+            use_default_signers = safe_call(lambda: rollup_contract.functions.useDefaultSigners().call(), False)
+            
+            result = {
+                "rollupSignersCount": signers_count,
+                "rollupThreshold": threshold,
+                "rollupSigners": signers_list,
+                "rollupMultisigHash": multisig_hash,
+                "useDefaultSigners": use_default_signers
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error getting rollup signers info from {rollup_contract_address}: {e}")
+            return {
+                "rollupSignersCount": 0,
+                "rollupThreshold": 0,
+                "rollupSigners": [],
+                "rollupMultisigHash": "0x",
+                "useDefaultSigners": False
+            }
 
     def call_agglayer_rpc(self, url: str, method: str, params: List = None) -> Dict:
         """Make an RPC call to AggLayer endpoint"""
@@ -1097,6 +1192,19 @@ class ContractInteractor:
                     rollup_data["type"] = "ALGateway"
                 else:
                     rollup_data["type"] = "Unknown"
+                
+                # Get rollup-level signers information (add to all rollups)
+                if rollup_data["isActive"] and rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
+                    rollup_signers_info = self._get_rollup_signers_info(rollup_data["rollupContract"])
+                    if rollup_signers_info:
+                        rollup_data.update(rollup_signers_info)
+                else:
+                    # Set default signers values for inactive rollups
+                    rollup_data["rollupSignersCount"] = 0
+                    rollup_data["rollupThreshold"] = 0
+                    rollup_data["rollupSigners"] = []
+                    rollup_data["rollupMultisigHash"] = ""
+                    rollup_data["useDefaultSigners"] = False
                 
                 rollups.append(rollup_data)
         
