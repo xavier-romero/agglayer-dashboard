@@ -207,7 +207,21 @@ class ContractInteractor:
                 {'inputs': [], 'name': 'version', 'outputs': [{'internalType': 'string', 'name': '', 'type': 'string'}], 'stateMutability': 'pure', 'type': 'function'},
                 {'inputs': [], 'name': 'getThreshold', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
                 {'inputs': [], 'name': 'getAggchainSignersCount', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
-                {'inputs': [], 'name': 'getAggchainSigners', 'outputs': [{'internalType': 'address[]', 'name': '', 'type': 'address[]'}], 'stateMutability': 'view', 'type': 'function'},
+                {
+                    'inputs': [], 
+                    'name': 'getAggchainSignerInfos', 
+                    'outputs': [{
+                        'internalType': 'tuple(address,string)[]', 
+                        'name': '', 
+                        'type': 'tuple[]',
+                        'components': [
+                            {'internalType': 'address', 'name': 'addr', 'type': 'address'},
+                            {'internalType': 'string', 'name': 'url', 'type': 'string'}
+                        ]
+                    }], 
+                    'stateMutability': 'view', 
+                    'type': 'function'
+                },
                 {'inputs': [], 'name': 'getAggchainMultisigHash', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'},
             ]
             
@@ -241,7 +255,21 @@ class ContractInteractor:
             # Get multisig information
             details["threshold"] = safe_call("getThreshold", None)
             details["signersCount"] = safe_call("getAggchainSignersCount", None)
-            details["signers"] = safe_call("getAggchainSigners", [])
+            
+            # Get signer infos with URLs
+            signer_infos_raw = safe_call("getAggchainSignerInfos", [])
+            signer_infos_parsed = []
+            
+            for signer_info in signer_infos_raw:
+                try:
+                    signer_infos_parsed.append({
+                        "address": signer_info[0],
+                        "url": signer_info[1] if signer_info[1] else ""
+                    })
+                except:
+                    continue
+            
+            details["signers"] = signer_infos_parsed
             details["multisigHash"] = safe_hex_call("getAggchainMultisigHash")
             
             return details
@@ -485,40 +513,19 @@ class ContractInteractor:
                 print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
             
             # Get rollup-level signers information (for AggLayer Gateway rollups)
-            logger.info(f"🔍 STEP: About to fetch rollup signers for rollup {rollup_id}")
-            logger.info(f"🔍 ROLLUP_INFO: isActive={rollup_info['isActive']}, rollupContract={rollup_info['rollupContract']}")
             try:
                 if rollup_info["isActive"] and rollup_info["rollupContract"] != "0x0000000000000000000000000000000000000000":
-                    logger.info(f"🔍 CONDITION PASSED: Fetching rollup signers for rollup {rollup_id}, contract: {rollup_info['rollupContract']}")
-                    print(f"🔍 Fetching rollup signers for rollup {rollup_id}, contract: {rollup_info['rollupContract']}")
                     rollup_signers_info = self._get_rollup_signers_info(rollup_info["rollupContract"])
-                    logger.info(f"📊 SIGNERS RESULT: Rollup {rollup_id} signers result: {rollup_signers_info}")
-                    print(f"📊 Rollup {rollup_id} signers result: {rollup_signers_info}")
                     # Always update rollup_info with signers info (even if values are 0)
                     if rollup_signers_info is not None:
-                        logger.info(f"✅ UPDATING: Adding signers info to rollup_info for rollup {rollup_id}")
                         rollup_info.update(rollup_signers_info)
-                        logger.info(f"✅ UPDATED: rollup_info after update: rollupSignersCount={rollup_info.get('rollupSignersCount', 'NOT_SET')}")
-                        print(f"✅ Rollup {rollup_id} signers info added to rollup_info")
-                    else:
-                        logger.error(f"❌ ERROR: Rollup {rollup_id} signers info was None")
-                        print(f"❌ Rollup {rollup_id} signers info was None")
-                else:
-                    logger.info(f"⏭️ SKIPPED: Rollup {rollup_id} signers fetch - condition not met (isActive={rollup_info['isActive']}, contract={rollup_info['rollupContract']})")
             except Exception as e:
-                logger.error(f"🚨 EXCEPTION: Could not fetch rollup signers info for rollup {rollup_id}: {e}")
-                print(f"Warning: Could not fetch rollup signers info for rollup {rollup_id}: {e}")
                 # Set default values for signers info
                 rollup_info["rollupSignersCount"] = 0
                 rollup_info["rollupThreshold"] = 0
                 rollup_info["rollupSigners"] = []
                 rollup_info["rollupMultisigHash"] = ""
-                logger.info(f"🔧 DEFAULT VALUES SET: rollup {rollup_id} got default signers values")
-            except Exception as e:
-                logger.error(f"🚨 EXCEPTION: Could not get rollup type details for rollup {rollup_id}: {e}")
-                print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
             
-            logger.info(f"🏁 RETURNING: rollup_info for rollup {rollup_id} with rollupSignersCount={rollup_info.get('rollupSignersCount', 'NOT_SET')}")
             return rollup_info
             
         except Exception as e:
@@ -552,6 +559,29 @@ class ContractInteractor:
             print(f"Warning: Could not format program vkey: {e}")
             return ""
     
+    def _format_aggchain_type(self, value) -> str:
+        """Format AGGCHAIN_TYPE bytes2 value for display"""
+        try:
+            # Convert bytes2 to integer for comparison
+            if isinstance(value, bytes):
+                # Convert bytes to int (big-endian)
+                int_value = int.from_bytes(value, byteorder='big')
+            elif isinstance(value, int):
+                int_value = value
+            else:
+                return str(value)
+            
+            # Map known values
+            if int_value == 0:
+                return "ECDSAMultisig"
+            elif int_value == 1:
+                return "FEP"
+            else:
+                # Display the hex value for unknown types
+                return f"0x{int_value:04x}"
+        except:
+            return str(value)
+    
     def _get_rollup_signers_info(self, rollup_contract_address: str) -> Dict[str, Any]:
         """Get signers information from individual rollup contract"""
         try:
@@ -559,9 +589,25 @@ class ContractInteractor:
             rollup_signers_abi = [
                 {'inputs': [], 'name': 'getAggchainSignersCount', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
                 {'inputs': [], 'name': 'getThreshold', 'outputs': [{'internalType': 'uint256', 'name': '', 'type': 'uint256'}], 'stateMutability': 'view', 'type': 'function'},
-                {'inputs': [], 'name': 'getAggchainSigners', 'outputs': [{'internalType': 'address[]', 'name': '', 'type': 'address[]'}], 'stateMutability': 'view', 'type': 'function'},
+                {
+                    'inputs': [], 
+                    'name': 'getAggchainSignerInfos', 
+                    'outputs': [{
+                        'internalType': 'tuple(address,string)[]', 
+                        'name': '', 
+                        'type': 'tuple[]',
+                        'components': [
+                            {'internalType': 'address', 'name': 'addr', 'type': 'address'},
+                            {'internalType': 'string', 'name': 'url', 'type': 'string'}
+                        ]
+                    }], 
+                    'stateMutability': 'view', 
+                    'type': 'function'
+                },
                 {'inputs': [], 'name': 'getAggchainMultisigHash', 'outputs': [{'internalType': 'bytes32', 'name': '', 'type': 'bytes32'}], 'stateMutability': 'view', 'type': 'function'},
-                {'inputs': [], 'name': 'useDefaultSigners', 'outputs': [{'internalType': 'bool', 'name': '', 'type': 'bool'}], 'stateMutability': 'view', 'type': 'function'}
+                {'inputs': [], 'name': 'useDefaultSigners', 'outputs': [{'internalType': 'bool', 'name': '', 'type': 'bool'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'AGGCHAIN_TYPE', 'outputs': [{'internalType': 'bytes2', 'name': '', 'type': 'bytes2'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'optimisticMode', 'outputs': [{'internalType': 'bool', 'name': '', 'type': 'bool'}], 'stateMutability': 'view', 'type': 'function'}
             ]
             
             rollup_contract = self.w3.eth.contract(
@@ -579,28 +625,53 @@ class ContractInteractor:
             # Get rollup-level signers info
             signers_count = safe_call(lambda: rollup_contract.functions.getAggchainSignersCount().call(), 0)
             threshold = safe_call(lambda: rollup_contract.functions.getThreshold().call(), 0)
-            signers_list = safe_call(lambda: rollup_contract.functions.getAggchainSigners().call(), [])
+            
+            # Get signer infos with URLs
+            signer_infos_raw = safe_call(lambda: rollup_contract.functions.getAggchainSignerInfos().call(), [])
+            rollup_signers_parsed = []
+            
+            for signer_info in signer_infos_raw:
+                try:
+                    rollup_signers_parsed.append({
+                        "address": signer_info[0],
+                        "url": signer_info[1] if signer_info[1] else ""
+                    })
+                except:
+                    continue
+            
             multisig_hash = safe_call(lambda: rollup_contract.functions.getAggchainMultisigHash().call().hex() if rollup_contract.functions.getAggchainMultisigHash().call() else "0x", "0x")
             use_default_signers = safe_call(lambda: rollup_contract.functions.useDefaultSigners().call(), False)
+            
+            # Get AGGCHAIN_TYPE (for AggLayer Gateway rollups)
+            aggchain_type_raw = safe_call(lambda: rollup_contract.functions.AGGCHAIN_TYPE().call(), b'\x00\x00')
+            aggchain_type_display = self._format_aggchain_type(aggchain_type_raw)
+            
+            # Get optimisticMode (only for FEP AggLayer Gateway rollups)
+            optimistic_mode = None
+            if aggchain_type_display == "FEP":
+                optimistic_mode = safe_call(lambda: rollup_contract.functions.optimisticMode().call(), False)
             
             result = {
                 "rollupSignersCount": signers_count,
                 "rollupThreshold": threshold,
-                "rollupSigners": signers_list,
+                "rollupSigners": rollup_signers_parsed,
                 "rollupMultisigHash": multisig_hash,
-                "useDefaultSigners": use_default_signers
+                "useDefaultSigners": use_default_signers,
+                "aggchainType": aggchain_type_display,
+                "optimisticMode": optimistic_mode
             }
             
             return result
             
         except Exception as e:
-            print(f"Error getting rollup signers info from {rollup_contract_address}: {e}")
             return {
                 "rollupSignersCount": 0,
                 "rollupThreshold": 0,
                 "rollupSigners": [],
                 "rollupMultisigHash": "0x",
-                "useDefaultSigners": False
+                "useDefaultSigners": False,
+                "aggchainType": "N/A",
+                "optimisticMode": None
             }
 
     def call_agglayer_rpc(self, url: str, method: str, params: List = None) -> Dict:
@@ -1048,20 +1119,30 @@ class ContractInteractor:
             if rollup_contract_address == "0x0000000000000000000000000000000000000000":
                 return {}
                 
-            # Load rollup contract ABI
-            rollup_abi = load_abi("PolygonZkEVM.json")
-            rollup_contract = self.w3.eth.contract(
-                address=rollup_contract_address,
-                abi=rollup_abi
-            )
-            
             # Get sequencer info
             sequencer_info = {}
-            try:
-                sequencer_info["trustedSequencer"] = rollup_contract.functions.trustedSequencer().call()
-                sequencer_info["trustedSequencerURL"] = rollup_contract.functions.trustedSequencerURL().call()
-            except Exception as e:
-                print(f"Note: Could not get sequencer info: {e}")
+            
+            # Try different ABIs as different rollup types may have different interfaces
+            abi_files = ["AggchainFEP.json", "PolygonZkEVM.json", "PolygonValidiumEtrog.json"]
+            
+            for abi_file in abi_files:
+                try:
+                    rollup_abi = load_abi(abi_file)
+                    rollup_contract = self.w3.eth.contract(
+                        address=rollup_contract_address,
+                        abi=rollup_abi
+                    )
+                    
+                    # Try to get sequencer info
+                    sequencer_info["trustedSequencer"] = rollup_contract.functions.trustedSequencer().call()
+                    sequencer_info["trustedSequencerURL"] = rollup_contract.functions.trustedSequencerURL().call()
+                    
+                    print(f"Successfully got sequencer info using {abi_file}")
+                    break  # Success, exit the loop
+                    
+                except Exception as e:
+                    print(f"Failed to get sequencer info using {abi_file}: {e}")
+                    continue  # Try next ABI
             
             return sequencer_info
         except Exception as e:
@@ -1104,6 +1185,7 @@ class ContractInteractor:
             return {
                 "rollupContract": rollup_data[0],                    # Address
                 "chainID": rollup_data[1],                           # Integer
+                "verifier": rollup_data[2],                         # Verifier address
                 "consensusImplementation": rollup_type_info.get("rollupTypeConsensus", rollup_data[2]), # Use rollup type consensus (corrected)
                 "forkID": rollup_data[3],                           # Integer 
                 "lastVerifiedBatch": rollup_data[5],                # Integer
@@ -1176,6 +1258,11 @@ class ContractInteractor:
                 if rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
                     rollup_data["networkName"] = self.get_network_name(rollup_data["rollupContract"])
                     rollup_data["trustedSequencerURL"] = self.get_trusted_sequencer_url(rollup_data["rollupContract"])
+                    
+                    # Get sequencer info (trusted sequencer address)
+                    sequencer_info = self.get_sequencer_info(rollup_data["rollupContract"])
+                    rollup_data.update(sequencer_info)
+                    
                     rollup_data["isActive"] = True
                 else:
                     rollup_data["networkName"] = f"Rollup {rollup_id}"
@@ -1205,6 +1292,8 @@ class ContractInteractor:
                     rollup_data["rollupSigners"] = []
                     rollup_data["rollupMultisigHash"] = ""
                     rollup_data["useDefaultSigners"] = False
+                    rollup_data["aggchainType"] = "N/A"
+                    rollup_data["optimisticMode"] = None
                 
                 rollups.append(rollup_data)
         

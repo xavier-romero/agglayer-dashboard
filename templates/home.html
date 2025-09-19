@@ -163,7 +163,7 @@ cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
                                     <div class="rollup-title">
                                         <strong>Rollup #{{ rollup.rollupID }}</strong>
                                         <span style="margin-left: 10px; padding: 2px 6px; background: #e3f2fd; color: #1976d2; border-radius: 12px; font-size: 0.8em;">
-                                            {{ rollup.rollupVerifierTypeFriendly }}
+                                            {{ rollup.rollupVerifierTypeFriendly }}{% if rollup.rollupVerifierType == 2 and rollup.aggchainType %} ({{ rollup.aggchainType }}){% endif %}
                                         </span>
                                         {% if rollup.isActive %}
                                             <span style="margin-left: 5px; color: #4caf50;">✅</span>
@@ -199,6 +199,28 @@ cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
                                             <span class="detail-label">Rollup Type ID:</span>
                                             <span class="detail-value">{{ rollup.rollupTypeID }}</span>
                                         </div>
+                                        {% if rollup.rollupVerifierType == 2 %}
+                                        <div class="detail-item">
+                                            <span class="detail-label">Aggchain Type:</span>
+                                            <span class="detail-value">{{ rollup.aggchainType | default("N/A") }}</span>
+                                        </div>
+                                        {% if rollup.aggchainType == "FEP" and rollup.optimisticMode is not none %}
+                                        <div class="detail-item">
+                                            <span class="detail-label">Optimistic Mode:</span>
+                                            <span class="detail-value">
+                                                {% if rollup.optimisticMode %}True{% else %}False{% endif %}
+                                                {% if rollup.hasAgchainManagerKey %}
+                                                <button 
+                                                    id="toggleOptimistic-{{ rollup.rollupID }}"
+                                                    onclick="toggleOptimisticMode({{ rollup.rollupID }}, {{ rollup.optimisticMode | lower }})"
+                                                    style="margin-left: 10px; padding: 4px 8px; font-size: 0.8em; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: {% if rollup.optimisticMode %}#f44336{% else %}#4caf50{% endif %}; color: white;">
+                                                    {% if rollup.optimisticMode %}Disable(){% else %}Enable(){% endif %}
+                                                </button>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        {% endif %}
+                                        {% endif %}
                                         <div class="detail-item">
                                             <span class="detail-label">Consensus Implementation:</span>
                                             <span class="detail-value"><code class="full-address">{{ rollup.rollupTypeConsensus or rollup.consensusImplementation }}</code></span>
@@ -237,6 +259,25 @@ cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
                                             </span>
                                         </div>
                                         <div class="detail-item">
+                                            <span class="detail-label">Verifier Type:</span>
+                                            <span class="detail-value">
+                                                {{ rollup.rollupVerifierTypeFriendly or rollup.rollupVerifierType }}
+                                                <span style="color: #666; font-size: 0.9em;">({{ rollup.rollupVerifierType }})</span>
+                                            </span>
+                                        </div>
+                                        {% if rollup.programVKey %}
+                                        <div class="detail-item">
+                                            <span class="detail-label">Program VKey:</span>
+                                            <span class="detail-value"><code class="full-address">{{ rollup.programVKey }}</code></span>
+                                        </div>
+                                        {% endif %}
+                                        {% if rollup.trustedSequencer %}
+                                        <div class="detail-item">
+                                            <span class="detail-label">Trusted Sequencer Address:</span>
+                                            <span class="detail-value"><code class="full-address">{{ rollup.trustedSequencer }}</code></span>
+                                        </div>
+                                        {% endif %}
+                                        <div class="detail-item">
                                             <span class="detail-label">Chain ID:</span>
                                             <span class="detail-value">{{ rollup.chainID }}</span>
                                         </div>
@@ -268,7 +309,25 @@ cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
                                                 </div>
                                                 <div class="detail-item">
                                                     <span class="detail-label">Threshold:</span>
-                                                    <span class="detail-value">{{ rollup.rollupThreshold }}</span>
+                                                    <span class="detail-value">
+                                                        <span style="background: #f0f8ff; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #e1e8ed;">{{ rollup.rollupThreshold }}</span>
+                                                        {% if not rollup.useDefaultSigners and rollup.hasAgchainManagerKey %}
+                                                        <span style="margin: 0 8px; color: #666; font-size: 0.9em;">→</span>
+                                                        <input 
+                                                            type="number" 
+                                                            id="newThreshold-{{ rollup.rollupID }}" 
+                                                            min="1" 
+                                                            max="{{ rollup.rollupSignersCount or 10 }}"
+                                                            value="{{ rollup.rollupThreshold }}"
+                                                            style="width: 50px; padding: 3px 6px; font-size: 0.85em; border: 2px solid #2196f3; border-radius: 4px; background: #fff8e1; font-weight: 500;">
+                                                        <button 
+                                                            id="updateThreshold-{{ rollup.rollupID }}"
+                                                            onclick="updateThreshold({{ rollup.rollupID }})"
+                                                            style="margin-left: 6px; padding: 4px 8px; font-size: 0.8em; border: 1px solid #1976d2; border-radius: 4px; cursor: pointer; background: #2196f3; color: white; font-weight: 500;">
+                                                            Update()
+                                                        </button>
+                                                        {% endif %}
+                                                    </span>
                                                 </div>
                                                 <div class="detail-item">
                                                     <span class="detail-label">Use AgglGW signers:</span>
@@ -283,11 +342,18 @@ cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
                                                 {% if rollup.rollupSigners and rollup.rollupSigners|length > 0 %}
                                                 <div class="detail-item" style="grid-column: 1 / -1;">
                                                     <span class="detail-label">Signers:</span>
-                                                    <span class="detail-value">
+                                                    <div class="detail-value">
                                                         {% for signer in rollup.rollupSigners %}
-                                                            <code class="full-address">{{ signer }}</code>{% if not loop.last %}<br>{% endif %}
+                                                            <div style="display: flex; align-items: center; margin-bottom: 4px; gap: 10px;">
+                                                                <code class="full-address">{{ signer.address }}</code>
+                                                                {% if signer.url and signer.url.strip() %}
+                                                                    <small style="color: #666;">
+                                                                        🔗 <a href="{{ signer.url }}" target="_blank" style="color: #1976d2; text-decoration: none;">{{ signer.url }}</a>
+                                                                    </small>
+                                                                {% endif %}
+                                                            </div>
                                                         {% endfor %}
-                                                    </span>
+                                                    </div>
                                                 </div>
                                                 {% endif %}
                                             </div>
@@ -313,19 +379,42 @@ cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "networkName()(string)"
 # Trusted Sequencer URL  
 cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "trustedSequencerURL()(string)"
 
+# Trusted Sequencer Address
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "trustedSequencer()(address)"
+
 # Get Full Rollup Data
 cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "rollupIDToRollupDataDeserialized(uint32)(address,uint64,address,uint64,bytes32,uint64,uint64,uint64,uint64,uint64,uint64,uint8)" $ROLLUP_ID
 
 # Chain ID is at index 0 of returned tuple
 # Verifier Address is at index 2 of returned tuple  
 # Fork ID is at index 3 of returned tuple
+# Verifier Type is at index 11 of returned tuple
+
+# Get Rollup Type Details (for Program VKey)
+export ROLLUP_TYPE_ID=$(cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "rollupIDToRollupDataDeserialized(uint32)" $ROLLUP_ID | cut -d' ' -f11)
+cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "rollupTypeMap(uint32)(address,uint64,address,address,bytes32,string)" $ROLLUP_TYPE_ID
 
 # Rollup-Level Signers Information (from individual rollup contract)
 cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainSignersCount()(uint256)"
 cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getThreshold()(uint256)"
-cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainSigners()(address[])"
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainSignerInfos()(tuple(address,string)[])"
 cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "getAggchainMultisigHash()(bytes32)"
-cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "useDefaultSigners()(bool)"</code></pre>
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "useDefaultSigners()(bool)"
+
+# Aggchain Type (for AggLayer Gateway rollups only)
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "AGGCHAIN_TYPE()(bytes2)"
+
+# Optimistic Mode (for FEP AggLayer Gateway rollups only)
+cast call --rpc-url $RPC_URL $ROLLUP_CONTRACT "optimisticMode()(bool)"
+
+# Enable Optimistic Mode
+cast send --rpc-url $RPC_URL --private-key $PRIVATE_KEY $ROLLUP_CONTRACT "enableOptimisticMode()"
+
+# Disable Optimistic Mode  
+cast send --rpc-url $RPC_URL --private-key $PRIVATE_KEY $ROLLUP_CONTRACT "disableOptimisticMode()"
+
+# Update Threshold (when not using AgglGW signers)
+cast send --rpc-url $RPC_URL --private-key $PRIVATE_KEY $ROLLUP_CONTRACT "updateSignersAndThreshold(tuple(address,uint256)[],tuple(address,string)[],uint256)" "[]" "[]" NEW_THRESHOLD_VALUE</code></pre>
                                         </div>
                                     </div>
                                     
@@ -653,7 +742,14 @@ cast call --rpc-url $RPC_URL $GER_ADDRESS "getRoot()(bytes32)"</code></pre>
                                 <div class="detail-value">
                                     {% if summary.aggLayerDetails.signers and summary.aggLayerDetails.signers|length > 0 %}
                                         {% for signer in summary.aggLayerDetails.signers %}
-                                        <div><code class="full-address">{{ signer }}</code></div>
+                                        <div style="display: flex; align-items: center; margin-bottom: 4px; gap: 10px;">
+                                            <code class="full-address">{{ signer.address }}</code>
+                                            {% if signer.url and signer.url.strip() %}
+                                                <small style="color: #666;">
+                                                    🔗 <a href="{{ signer.url }}" target="_blank" style="color: #1976d2; text-decoration: none;">{{ signer.url }}</a>
+                                                </small>
+                                            {% endif %}
+                                        </div>
                                         {% endfor %}
                                     {% else %}
                                         <span style="color: #666;">[] (empty array)</span>
@@ -698,7 +794,7 @@ cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainSignersCount()(uint25
 cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getThreshold()(uint256)"
 
 # Get All Signers
-cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainSigners()(address[])"
+cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainSignerInfos()(tuple(address,string)[])"
 
 # Get Multisig Hash
 cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainMultisigHash()(bytes32)"</code></pre>
@@ -1111,6 +1207,88 @@ function toggleRollupDetails(rollupId) {
         details.style.display = 'none';
         arrow.classList.remove('expanded');
         arrow.innerHTML = '▼';
+    }
+}
+
+async function toggleOptimisticMode(rollupId, currentState) {
+    const button = document.getElementById(`toggleOptimistic-${rollupId}`);
+    
+    // Disable button during operation
+    button.disabled = true;
+    button.style.opacity = '0.6';
+    button.textContent = 'Processing...';
+    
+    try {
+        const response = await fetch(`/toggle-optimistic-mode/${rollupId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Show success message with transaction hash
+            alert(`Successfully ${result.action}d optimistic mode! Transaction hash: ${result.tx_hash}`);
+            // Reload page to reflect new state
+            location.reload();
+        } else {
+            alert(`Failed to ${result.action} optimistic mode: ${result.error || 'Unknown error'}`);
+        }
+    } catch (error) {
+        alert(`Error toggling optimistic mode: ${error.message}`);
+    } finally {
+        // Re-enable button
+        button.disabled = false;
+        button.style.opacity = '1';
+                button.textContent = currentState ? 'Disable()' : 'Enable()';
+    }
+}
+
+async function updateThreshold(rollupId) {
+    const input = document.getElementById(`newThreshold-${rollupId}`);
+    const button = document.getElementById(`updateThreshold-${rollupId}`);
+    
+    const newThreshold = parseInt(input.value);
+    
+    if (!newThreshold || newThreshold < 1) {
+        alert('Please enter a valid threshold (minimum 1)');
+        return;
+    }
+    
+    // Disable button and input during operation
+    button.disabled = true;
+    input.disabled = true;
+    button.style.opacity = '0.6';
+    button.textContent = 'Updating...';
+    
+    try {
+        const response = await fetch(`/update-threshold/${rollupId}?new_threshold=${newThreshold}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Show success message with transaction hash
+            alert(`Successfully updated threshold from ${result.old_threshold} to ${result.new_threshold}! Transaction hash: ${result.tx_hash}`);
+            // Reload page to reflect new state
+            location.reload();
+        } else {
+            alert(`Failed to update threshold: ${result.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        alert(`Error updating threshold: ${error.message}`);
+    } finally {
+        // Re-enable button and input
+        button.disabled = false;
+        input.disabled = false;
+        button.style.opacity = '1';
+        button.textContent = 'Update()';
     }
 }
 </script>
