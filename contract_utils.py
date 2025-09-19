@@ -40,7 +40,6 @@ class ContractInteractor:
             
             # Load ABIs
             self.rollup_manager_abi = load_abi("PolygonRollupManagerV2.json")
-            self.rollup_abi = load_abi("PolygonZkEVM.json")
             self.bridge_abi = load_abi("PolygonZkEVMBridgeV2.json")
             
             if not self.rollup_manager_abi:
@@ -512,14 +511,24 @@ class ContractInteractor:
             except Exception as e:
                 print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
             
-            # Multisig information is now lazy-loaded - set placeholder values
-            rollup_info["rollupSignersCount"] = None  # Indicates lazy loading needed
-            rollup_info["rollupThreshold"] = None
-            rollup_info["rollupSigners"] = []
-            rollup_info["rollupMultisigHash"] = None
-            rollup_info["useDefaultSigners"] = None
-            rollup_info["aggchainType"] = None
-            rollup_info["optimisticMode"] = None
+            # Get basic rollup info immediately (aggchainType, optimisticMode) - NOT multisig related
+            if rollup_info["isActive"] and rollup_info["rollupContract"] != "0x0000000000000000000000000000000000000000":
+                try:
+                    basic_info = self._get_basic_rollup_info(rollup_info["rollupContract"])
+                    rollup_info.update(basic_info)
+                except:
+                    rollup_info["aggchainType"] = "N/A"
+                    rollup_info["optimisticMode"] = None
+            else:
+                rollup_info["aggchainType"] = "N/A" 
+                rollup_info["optimisticMode"] = None
+            
+            # ONLY multisig information is lazy-loaded - set placeholder values
+            rollup_info["rollupSignersCount"] = None  # Lazy-loaded
+            rollup_info["rollupThreshold"] = None     # Lazy-loaded
+            rollup_info["rollupSigners"] = []         # Lazy-loaded
+            rollup_info["rollupMultisigHash"] = None  # Lazy-loaded
+            rollup_info["useDefaultSigners"] = None   # Lazy-loaded
             
             return rollup_info
             
@@ -554,6 +563,46 @@ class ContractInteractor:
             print(f"Warning: Could not format program vkey: {e}")
             return ""
     
+    def _get_basic_rollup_info(self, rollup_contract_address: str) -> Dict[str, Any]:
+        """Get basic rollup information (aggchainType, optimisticMode) - NOT multisig related"""
+        try:
+            # ABI for basic rollup functions (fast calls)
+            basic_rollup_abi = [
+                {'inputs': [], 'name': 'AGGCHAIN_TYPE', 'outputs': [{'internalType': 'bytes2', 'name': '', 'type': 'bytes2'}], 'stateMutability': 'view', 'type': 'function'},
+                {'inputs': [], 'name': 'optimisticMode', 'outputs': [{'internalType': 'bool', 'name': '', 'type': 'bool'}], 'stateMutability': 'view', 'type': 'function'}
+            ]
+            
+            rollup_contract = self.w3.eth.contract(
+                address=rollup_contract_address,
+                abi=basic_rollup_abi
+            )
+
+            def safe_call(func, default_value):
+                try:
+                    return func()
+                except:
+                    return default_value
+            
+            # Get AGGCHAIN_TYPE (basic rollup info, not multisig)
+            aggchain_type_raw = safe_call(lambda: rollup_contract.functions.AGGCHAIN_TYPE().call(), b'\x00\x00')
+            aggchain_type_display = self._format_aggchain_type(aggchain_type_raw)
+            
+            # Get optimisticMode (only for FEP AggLayer Gateway rollups)
+            optimistic_mode = None
+            if aggchain_type_display == "FEP":
+                optimistic_mode = safe_call(lambda: rollup_contract.functions.optimisticMode().call(), False)
+            
+            return {
+                "aggchainType": aggchain_type_display,
+                "optimisticMode": optimistic_mode
+            }
+            
+        except Exception as e:
+            return {
+                "aggchainType": "N/A",
+                "optimisticMode": None
+            }
+
     def _format_aggchain_type(self, value) -> str:
         """Format AGGCHAIN_TYPE bytes2 value for display"""
         try:
@@ -574,8 +623,26 @@ class ContractInteractor:
             else:
                 # Display the hex value for unknown types
                 return f"0x{int_value:04x}"
-        except:
+        except Exception as e:
             return str(value)
+    
+    def _get_rollup_abi_filename(self, rollup_verifier_type: int, aggchain_type: str = None) -> str:
+        """Get the appropriate ABI filename based on rollup type"""
+        if rollup_verifier_type == 0:  # zkEVM
+            return "PolygonZkEVM.json"
+        elif rollup_verifier_type == 1:  # Pessimistic Proof (PP)
+            return "PolygonValidiumEtrog.json"
+        elif rollup_verifier_type == 2:  # AggLayer Gateway
+            if aggchain_type == "FEP":
+                return "AggchainFEP.json"
+            elif aggchain_type == "ECDSAMultisig":
+                return "AggchainECDSA.json"
+            else:
+                # Default to FEP if aggchainType is unknown
+                return "AggchainFEP.json"
+        else:
+            # Default fallback
+            return "PolygonZkEVM.json"
     
     def _get_rollup_signers_info(self, rollup_contract_address: str) -> Dict[str, Any]:
         """Get signers information from individual rollup contract"""
@@ -1108,7 +1175,7 @@ class ContractInteractor:
                 print(f"Error getting recent settlement events: {e}")
                 return []
 
-    def get_sequencer_info(self, rollup_contract_address: str) -> Dict:
+    def get_sequencer_info(self, rollup_contract_address: str, rollup_verifier_type: int = None, aggchain_type: str = None) -> Dict:
         """Get sequencer information from rollup contract"""
         try:
             if rollup_contract_address == "0x0000000000000000000000000000000000000000":
@@ -1117,17 +1184,27 @@ class ContractInteractor:
             # Get sequencer info
             sequencer_info = {}
             
-            # Try different ABIs as different rollup types may have different interfaces
-            abi_files = ["AggchainFEP.json", "PolygonZkEVM.json", "PolygonValidiumEtrog.json"]
+            # Determine the correct ABI file based on rollup type
+            if rollup_verifier_type is not None:
+                abi_file = self._get_rollup_abi_filename(rollup_verifier_type, aggchain_type)
+                abi_files = [abi_file]
+                print(f"Using specific ABI for rollup type {rollup_verifier_type}: {abi_file}")
+            else:
+                # Fallback to trying different ABIs for backward compatibility
+                abi_files = ["AggchainFEP.json", "AggchainECDSA.json", "PolygonZkEVM.json", "PolygonValidiumEtrog.json"]
+                print("Rollup type unknown, trying multiple ABIs")
             
             for abi_file in abi_files:
                 try:
                     rollup_abi = load_abi(abi_file)
+                    if not rollup_abi:
+                        continue
+                        
                     rollup_contract = self.w3.eth.contract(
                         address=rollup_contract_address,
                         abi=rollup_abi
                     )
-                    
+            
                     # Try to get sequencer info
                     sequencer_info["trustedSequencer"] = rollup_contract.functions.trustedSequencer().call()
                     sequencer_info["trustedSequencerURL"] = rollup_contract.functions.trustedSequencerURL().call()
@@ -1140,6 +1217,7 @@ class ContractInteractor:
                     continue  # Try next ABI
             
             return sequencer_info
+
         except Exception as e:
             print(f"Error getting sequencer info: {e}")
             return {}
@@ -1214,28 +1292,64 @@ class ContractInteractor:
             print(f"Note: Could not get rollup type details for ID {rollup_type_id}: {e}")
             return {"genesis": "", "verifier": "0x0000000000000000000000000000000000000000"}
     
-    def get_network_name(self, rollup_contract_address: str) -> str:
+    def get_network_name(self, rollup_contract_address: str, rollup_verifier_type: int = None, aggchain_type: str = None) -> str:
         """Get network name from rollup contract"""
         try:
-            rollup_contract = self.w3.eth.contract(
-                address=rollup_contract_address,
-                abi=self.rollup_abi
-            )
-            return rollup_contract.functions.networkName().call()
+            # Determine the correct ABI file based on rollup type
+            if rollup_verifier_type is not None:
+                abi_file = self._get_rollup_abi_filename(rollup_verifier_type, aggchain_type)
+                abi_files = [abi_file]
+            else:
+                # Fallback to trying different ABIs
+                abi_files = ["AggchainFEP.json", "AggchainECDSA.json", "PolygonZkEVM.json", "PolygonValidiumEtrog.json"]
+            
+            for abi_file in abi_files:
+                try:
+                    rollup_abi = load_abi(abi_file)
+                    if not rollup_abi:
+                        continue
+                        
+                    rollup_contract = self.w3.eth.contract(
+                        address=rollup_contract_address,
+                        abi=rollup_abi
+                    )
+                    return rollup_contract.functions.networkName().call()
+                except Exception as e:
+                    continue
+                    
         except Exception as e:
             print(f"Error getting network name for {rollup_contract_address}: {e}")
-            return f"Unknown"
     
-    def get_trusted_sequencer_url(self, rollup_contract_address: str) -> str:
+        return "Unknown"
+    
+    def get_trusted_sequencer_url(self, rollup_contract_address: str, rollup_verifier_type: int = None, aggchain_type: str = None) -> str:
         """Get trusted sequencer URL from rollup contract"""
         try:
-            rollup_contract = self.w3.eth.contract(
-                address=rollup_contract_address,
-                abi=self.rollup_abi
-            )
-            return rollup_contract.functions.trustedSequencerURL().call()
+            # Determine the correct ABI file based on rollup type
+            if rollup_verifier_type is not None:
+                abi_file = self._get_rollup_abi_filename(rollup_verifier_type, aggchain_type)
+                abi_files = [abi_file]
+            else:
+                # Fallback to trying different ABIs
+                abi_files = ["AggchainFEP.json", "AggchainECDSA.json", "PolygonZkEVM.json", "PolygonValidiumEtrog.json"]
+            
+            for abi_file in abi_files:
+                try:
+                    rollup_abi = load_abi(abi_file)
+                    if not rollup_abi:
+                        continue
+                        
+                    rollup_contract = self.w3.eth.contract(
+                        address=rollup_contract_address,
+                        abi=rollup_abi
+                    )
+                    return rollup_contract.functions.trustedSequencerURL().call()
+                except Exception as e:
+                    continue
+                    
         except Exception as e:
             print(f"Error getting sequencer URL for {rollup_contract_address}: {e}")
+        
             return ""
     
     def get_all_rollups(self) -> List[Dict]:
@@ -1251,11 +1365,23 @@ class ContractInteractor:
                 
                 # Get network name if contract is deployed
                 if rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
-                    rollup_data["networkName"] = self.get_network_name(rollup_data["rollupContract"])
-                    rollup_data["trustedSequencerURL"] = self.get_trusted_sequencer_url(rollup_data["rollupContract"])
+                    rollup_data["networkName"] = self.get_network_name(
+                        rollup_data["rollupContract"],
+                        rollup_data.get("rollupVerifierType"),
+                        rollup_data.get("aggchainType")
+                    )
+                    rollup_data["trustedSequencerURL"] = self.get_trusted_sequencer_url(
+                        rollup_data["rollupContract"],
+                        rollup_data.get("rollupVerifierType"),
+                        rollup_data.get("aggchainType")
+                    )
                     
                     # Get sequencer info (trusted sequencer address)
-                    sequencer_info = self.get_sequencer_info(rollup_data["rollupContract"])
+                    sequencer_info = self.get_sequencer_info(
+                        rollup_data["rollupContract"],
+                        rollup_data.get("rollupVerifierType"),
+                        rollup_data.get("aggchainType")
+                    )
                     rollup_data.update(sequencer_info)
                     
                     rollup_data["isActive"] = True
@@ -1275,15 +1401,26 @@ class ContractInteractor:
                 else:
                     rollup_data["type"] = "Unknown"
                 
-                # Multisig information is now lazy-loaded via API to improve page load performance
-                # Set placeholder values - actual data will be fetched when multisig section is expanded
-                rollup_data["rollupSignersCount"] = None  # Indicates lazy loading needed
-                rollup_data["rollupThreshold"] = None
-                rollup_data["rollupSigners"] = []
-                rollup_data["rollupMultisigHash"] = None
-                rollup_data["useDefaultSigners"] = None
-                rollup_data["aggchainType"] = None
-                rollup_data["optimisticMode"] = None
+                # Get basic rollup fields immediately (aggchainType, optimisticMode) - these are NOT multisig related
+                if rollup_data["isActive"] and rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
+                    try:
+                        # Get basic rollup info (aggchainType, optimisticMode) - fast calls
+                        basic_info = self._get_basic_rollup_info(rollup_data["rollupContract"]) 
+                        rollup_data.update(basic_info)
+                    except:
+                        # Fallback values for basic info
+                        rollup_data["aggchainType"] = "N/A"
+                        rollup_data["optimisticMode"] = None
+                else:
+                    rollup_data["aggchainType"] = "N/A"
+                    rollup_data["optimisticMode"] = None
+                
+                # ONLY multisig information is lazy-loaded (expensive calls)
+                rollup_data["rollupSignersCount"] = None  # Lazy-loaded
+                rollup_data["rollupThreshold"] = None     # Lazy-loaded
+                rollup_data["rollupSigners"] = []         # Lazy-loaded  
+                rollup_data["rollupMultisigHash"] = None  # Lazy-loaded
+                rollup_data["useDefaultSigners"] = None   # Lazy-loaded
                 
                 rollups.append(rollup_data)
         

@@ -812,7 +812,7 @@ cast call --rpc-url $RPC_URL $AGGLAYER_GATEWAY "getAggchainMultisigHash()(bytes3
 </div>
 
 
-        {% endif %}
+            {% endif %}
         
 <style>
 /* Cast Commands Styling */
@@ -1323,6 +1323,89 @@ async function refreshCertificates(rollupId) {
     }
 }
 
+function getStatusText(statusObj) {
+    if (!statusObj || typeof statusObj !== 'object') {
+        return 'Unknown';
+    }
+    
+    // Status object structure: { "StatusType": { ... details ... } }
+    // Extract the key which represents the status type
+    const statusKeys = Object.keys(statusObj);
+    if (statusKeys.length === 0) {
+        return 'Unknown';
+    }
+    
+    const statusType = statusKeys[0];
+    
+    // Map internal status names to display names
+    switch (statusType) {
+        case 'InError':
+            return 'Error';
+        case 'Settled':
+            return 'Settled';
+        case 'Pending':
+            return 'Pending';
+        case 'Generated':
+            return 'Generated';
+        case 'Candidate':
+            return 'Candidate';
+        default:
+            return statusType; // Return the raw status if unknown
+    }
+}
+
+function getErrorMessage(statusObj) {
+    if (!statusObj || typeof statusObj !== 'object') {
+        return null;
+    }
+    
+    // Check if this is an InError status
+    if (statusObj.InError && statusObj.InError.error) {
+        const errorObj = statusObj.InError.error;
+        
+        let fullErrorMessage = null;
+        
+        // Extract the error message from various possible error types
+        if (errorObj.InternalError) {
+            fullErrorMessage = errorObj.InternalError;
+        } else if (errorObj.ValidationError) {
+            fullErrorMessage = errorObj.ValidationError;
+        } else if (errorObj.NetworkError) {
+            fullErrorMessage = errorObj.NetworkError;
+        } else {
+            // If it's some other error type, try to get the first value
+            const errorKeys = Object.keys(errorObj);
+            if (errorKeys.length > 0) {
+                fullErrorMessage = errorObj[errorKeys[0]];
+            }
+        }
+        
+        // Return just the first line for cleaner display
+        if (fullErrorMessage) {
+            return fullErrorMessage.split('\n')[0].trim();
+        }
+    }
+    
+    return null;
+}
+
+function getStatusColor(statusObj) {
+    const statusText = getStatusText(statusObj);
+    
+    switch (statusText) {
+        case 'Settled':
+            return '#4caf50'; // Green
+        case 'Pending':
+        case 'Generated':
+        case 'Candidate':
+            return '#ff9800'; // Orange
+        case 'Error':
+            return '#f44336'; // Red
+        default:
+            return '#757575'; // Gray
+    }
+}
+
 function renderCertificates(data) {
     if (!data.certificates) {
         return '<div style="color: #666; font-size: 0.85em;">No AggLayer URL configured</div>';
@@ -1341,20 +1424,20 @@ function renderCertificates(data) {
                     <div style="display: grid; gap: 6px;">
                         <div><strong>Height:</strong> ${cert.height || 'N/A'}</div>
                         <div><strong>Epoch:</strong> ${cert.epoch_number || 'N/A'}</div>
-                        <div><strong>Status:</strong> <span style="background: ${cert.status === 'Settled' ? '#4caf50' : cert.status === 'Pending' ? '#ff9800' : '#757575'}; color: white; padding: 1px 4px; border-radius: 2px; font-size: 0.9em;">${cert.status || 'Unknown'}</span></div>
+                        <div><strong>Status:</strong> <span style="background: ${getStatusColor(cert.status)}; color: white; padding: 1px 4px; border-radius: 2px; font-size: 0.9em;">${getStatusText(cert.status)}</span>${getErrorMessage(cert.status) ? `<br><small style="color: #f44336; margin-top: 4px; display: block; font-style: italic;">${getErrorMessage(cert.status)}</small>` : ''}</div>
                         <div><strong>Cert Index:</strong> ${cert.certificate_index !== null && cert.certificate_index !== undefined ? cert.certificate_index : 'N/A'}</div>
                         ${cert.settlement_block_number ? `<div><strong>Settlement Block:</strong> ${cert.settlement_block_number}</div>` : ''}
                         ${cert.settlement_gas_used ? `<div><strong>Gas Used:</strong> ${cert.settlement_gas_used.toLocaleString()} gas</div>` : ''}
                         ${cert.settlement_datetime ? `<div><strong>Settlement Time:</strong> ${cert.settlement_datetime}${cert.settlement_relative_time ? ` <span style="color: #666;">(${cert.settlement_relative_time})</span>` : ''}</div>` : ''}
-                    </div>
+        </div>
                     <!-- Right Column: Hashes -->
                     <div style="display: grid; gap: 6px;">
                         <div><strong>Certificate ID:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.certificate_id || 'N/A'}</code></div>
                         ${cert.settlement_tx_hash ? `<div><strong>Settlement TX:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.settlement_tx_hash}</code></div>` : ''}
                         ${cert.prev_local_exit_root ? `<div><strong>Prev Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.prev_local_exit_root}</code></div>` : ''}
                         ${cert.new_local_exit_root ? `<div><strong>New Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.new_local_exit_root}</code></div>` : ''}
-                    </div>
-                </div>
+    </div>
+</div>
             </div>
         `;
     }
@@ -1375,7 +1458,7 @@ function renderCertificates(data) {
                         <div><strong>Gas Used:</strong> ${cert.settlement_gas_used ? cert.settlement_gas_used.toLocaleString() + ' gas' : 'N/A'}</div>
                         <div><strong>Network ID:</strong> ${cert.network_id || 'N/A'}</div>
                         <div><strong>Settlement Time:</strong> ${cert.settlement_datetime || 'N/A'}${cert.settlement_relative_time ? ` <span style="color: #666;">(${cert.settlement_relative_time})</span>` : ''}</div>
-                    </div>
+</div>
                     <!-- Right Column: Hashes -->
                     <div style="display: grid; gap: 6px;">
                         <div><strong>Certificate ID:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.certificate_id || 'N/A'}</code></div>

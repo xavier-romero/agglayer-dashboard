@@ -1,11 +1,11 @@
 {
   "rollupManagerContractAddress": "0x6c6c009cC348976dB4A908c92B24433d4F6edA43",
-  "rpcURL": "http://127.0.0.1:33072",
-  "aggLayerURL": "http://127.0.0.1:33094",
+  "rpcURL": "http://127.0.0.1:33339",
+  "aggLayerURL": "http://127.0.0.1:33361",
   "l2rpcs": [
     {
       "rollupID": 1,
-      "l2rpc": "http://127.0.0.1:33082",
+      "l2rpc": "http://127.0.0.1:33349",
       "agchainmanager_key": "0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625"
     }
   ]

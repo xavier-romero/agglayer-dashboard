@@ -161,16 +161,32 @@ async def update_threshold(rollup_id: int, new_threshold: int):
         if rollup.get("rollupVerifierType") != 2:
             raise HTTPException(status_code=400, detail="Threshold update only available for AggLayer Gateway rollups")
         
+        # Check if multisig data needs to be fetched (lazy loading)
+        use_default_signers = rollup.get("useDefaultSigners")
+        current_signers_count = rollup.get("rollupSignersCount")
+        
+        if use_default_signers is None or current_signers_count is None:
+            # Lazy-loaded - need to fetch actual multisig data for validation
+            contract_interactor = get_interactor()
+            multisig_info = contract_interactor._get_rollup_signers_info(rollup.get("rollupContract"))
+            if multisig_info:
+                if use_default_signers is None:
+                    use_default_signers = multisig_info.get("useDefaultSigners", True)
+                if current_signers_count is None:
+                    current_signers_count = multisig_info.get("rollupSignersCount", 0)
+            else:
+                use_default_signers = True
+                current_signers_count = 0
+        
         # Check if using default signers (should be False to allow threshold update)
-        if rollup.get("useDefaultSigners", True):
+        if use_default_signers:
             raise HTTPException(status_code=400, detail="Cannot update threshold when using AgglGW signers")
         
         # Validate new threshold
         if new_threshold < 1:
             raise HTTPException(status_code=400, detail="Threshold must be at least 1")
         
-        current_signers_count = rollup.get("rollupSignersCount", 0)
-        if new_threshold > current_signers_count and current_signers_count > 0:
+        if current_signers_count and new_threshold > current_signers_count:
             raise HTTPException(status_code=400, detail=f"Threshold ({new_threshold}) cannot exceed signers count ({current_signers_count})")
         
         rollup_address = rollup.get("rollupContract")
@@ -292,7 +308,7 @@ async def get_rollup_multisig(rollup_id: int):
             if rollup_signers_info:
                 rollup_data.update(rollup_signers_info)
         
-        # Return only the multisig-related fields
+        # Return only the multisig-related fields (aggchainType/optimisticMode are loaded on page load)
         multisig_data = {
             "rollupID": rollup_data.get("rollupID"),
             "rollupSignersCount": rollup_data.get("rollupSignersCount", 0),
