@@ -57,59 +57,6 @@ async def home(request: Request):
             "error": str(e)
         })
 
-@app.get("/rollup/{rollup_id}", response_class=HTMLResponse)
-async def rollup_detail(request: Request, rollup_id: int):
-    """Rollup detail page"""
-    try:
-        contract_interactor = get_interactor()
-        rollup_data = contract_interactor.get_rollup_data(rollup_id)
-        
-        if not rollup_data:
-            raise HTTPException(status_code=404, detail=f"Rollup {rollup_id} not found")
-        
-        rollup_data["rollupID"] = rollup_id
-        
-        # Get additional details if contract is deployed
-        if rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
-            rollup_data["networkName"] = contract_interactor.get_network_name(rollup_data["rollupContract"])
-            rollup_data["trustedSequencerURL"] = contract_interactor.get_trusted_sequencer_url(rollup_data["rollupContract"])
-            
-            # Get sequencer info (trusted sequencer address, etc.)
-            sequencer_info = contract_interactor.get_sequencer_info(rollup_data["rollupContract"])
-            rollup_data.update(sequencer_info)
-        
-        # Network addresses moved to home page - removed from individual rollup
-        
-        # Get certificate data if aggLayerURL is available
-        env_config = config_loader.get_environment()
-        if env_config.aggLayerURL:
-            certificate_data = contract_interactor.get_certificate_data(rollup_id, env_config.aggLayerURL)
-            rollup_data["certificates"] = certificate_data
-            
-        # Get the single previous settlement by searching backwards from current settlement
-        current_block = None
-        settled_cert = rollup_data.get("certificates", {}).get("settled")
-        if settled_cert and settled_cert.get("settlement_block_number"):
-            current_block = settled_cert.get("settlement_block_number")
-        
-        if current_block:
-            previous_settlement = contract_interactor.get_previous_settlement_event(
-                rollup_id, current_block, env_config.aggLayerURL
-            )
-            rollup_data["recentSettlements"] = previous_settlement
-        else:
-            rollup_data["recentSettlements"] = []
-            
-        # Get L2 config if available
-        l2_config = config_loader.get_l2_config(str(rollup_id))
-        rollup_data["l2Config"] = l2_config
-        
-        return templates.TemplateResponse("rollup.html", {
-            "request": request,
-            "rollup": rollup_data
-        })
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
 
 @app.post("/toggle-optimistic-mode/{rollup_id}")
 async def toggle_optimistic_mode(rollup_id: int):
@@ -282,6 +229,81 @@ async def update_threshold(rollup_id: int, new_threshold: int):
             "old_threshold": rollup.get("rollupThreshold", 0),
             "new_threshold": new_threshold
         })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/rollup/{rollup_id}/certificates")
+async def get_rollup_certificates(rollup_id: int):
+    """Get certificate data for a specific rollup (for AJAX refresh)"""
+    try:
+        contract_interactor = get_interactor()
+        
+        # Get certificate data if aggLayerURL is available
+        env_config = config_loader.get_environment()
+        if not env_config.aggLayerURL:
+            return {"certificates": None, "recentSettlements": []}
+        
+        certificate_data = contract_interactor.get_certificate_data(rollup_id, env_config.aggLayerURL)
+        
+        # Get the single previous settlement by searching backwards from current settlement
+        current_block = None
+        settled_cert = certificate_data.get("settled")
+        if settled_cert and settled_cert.get("settlement_block_number"):
+            current_block = settled_cert.get("settlement_block_number")
+        
+        recent_settlements = []
+        if current_block:
+            previous_settlement = contract_interactor.get_previous_settlement_event(
+                rollup_id, current_block, env_config.aggLayerURL
+            )
+            recent_settlements = previous_settlement
+        
+        return {
+            "certificates": certificate_data,
+            "recentSettlements": recent_settlements
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/rollup/{rollup_id}/multisig")
+async def get_rollup_multisig(rollup_id: int):
+    """Get multisig data for a specific rollup (for AJAX refresh)"""
+    try:
+        contract_interactor = get_interactor()
+        
+        # Get rollup data
+        rollup_data = contract_interactor.get_rollup_data(rollup_id)
+        if not rollup_data:
+            raise HTTPException(status_code=404, detail=f"Rollup {rollup_id} not found")
+        
+        # Add rollup ID and agchainmanager_key availability
+        rollup_data["rollupID"] = rollup_id
+        l2_config = config_loader.get_l2_config(rollup_id)
+        rollup_data["hasAgchainManagerKey"] = bool(l2_config and l2_config.agchainmanager_key)
+        
+        # CRITICAL: Add multisig information (same as get_all_rollups does)
+        if (rollup_data.get("rollupContract") and 
+            rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000"):
+            rollup_signers_info = contract_interactor._get_rollup_signers_info(rollup_data["rollupContract"])
+            if rollup_signers_info:
+                rollup_data.update(rollup_signers_info)
+        
+        # Return only the multisig-related fields
+        multisig_data = {
+            "rollupID": rollup_data.get("rollupID"),
+            "rollupSignersCount": rollup_data.get("rollupSignersCount", 0),
+            "rollupThreshold": rollup_data.get("rollupThreshold", 0),
+            "rollupSigners": rollup_data.get("rollupSigners", []),
+            "rollupMultisigHash": rollup_data.get("rollupMultisigHash", "0x"),
+            "useDefaultSigners": rollup_data.get("useDefaultSigners", False),
+            "hasAgchainManagerKey": rollup_data.get("hasAgchainManagerKey", False)
+        }
+        
+        return multisig_data
         
     except HTTPException:
         raise

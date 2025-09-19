@@ -512,19 +512,14 @@ class ContractInteractor:
             except Exception as e:
                 print(f"Warning: Could not get rollup type details for rollup {rollup_id}: {e}")
             
-            # Get rollup-level signers information (for AggLayer Gateway rollups)
-            try:
-                if rollup_info["isActive"] and rollup_info["rollupContract"] != "0x0000000000000000000000000000000000000000":
-                    rollup_signers_info = self._get_rollup_signers_info(rollup_info["rollupContract"])
-                    # Always update rollup_info with signers info (even if values are 0)
-                    if rollup_signers_info is not None:
-                        rollup_info.update(rollup_signers_info)
-            except Exception as e:
-                # Set default values for signers info
-                rollup_info["rollupSignersCount"] = 0
-                rollup_info["rollupThreshold"] = 0
-                rollup_info["rollupSigners"] = []
-                rollup_info["rollupMultisigHash"] = ""
+            # Multisig information is now lazy-loaded - set placeholder values
+            rollup_info["rollupSignersCount"] = None  # Indicates lazy loading needed
+            rollup_info["rollupThreshold"] = None
+            rollup_info["rollupSigners"] = []
+            rollup_info["rollupMultisigHash"] = None
+            rollup_info["useDefaultSigners"] = None
+            rollup_info["aggchainType"] = None
+            rollup_info["optimisticMode"] = None
             
             return rollup_info
             
@@ -1280,20 +1275,15 @@ class ContractInteractor:
                 else:
                     rollup_data["type"] = "Unknown"
                 
-                # Get rollup-level signers information (add to all rollups)
-                if rollup_data["isActive"] and rollup_data["rollupContract"] != "0x0000000000000000000000000000000000000000":
-                    rollup_signers_info = self._get_rollup_signers_info(rollup_data["rollupContract"])
-                    if rollup_signers_info:
-                        rollup_data.update(rollup_signers_info)
-                else:
-                    # Set default signers values for inactive rollups
-                    rollup_data["rollupSignersCount"] = 0
-                    rollup_data["rollupThreshold"] = 0
-                    rollup_data["rollupSigners"] = []
-                    rollup_data["rollupMultisigHash"] = ""
-                    rollup_data["useDefaultSigners"] = False
-                    rollup_data["aggchainType"] = "N/A"
-                    rollup_data["optimisticMode"] = None
+                # Multisig information is now lazy-loaded via API to improve page load performance
+                # Set placeholder values - actual data will be fetched when multisig section is expanded
+                rollup_data["rollupSignersCount"] = None  # Indicates lazy loading needed
+                rollup_data["rollupThreshold"] = None
+                rollup_data["rollupSigners"] = []
+                rollup_data["rollupMultisigHash"] = None
+                rollup_data["useDefaultSigners"] = None
+                rollup_data["aggchainType"] = None
+                rollup_data["optimisticMode"] = None
                 
                 rollups.append(rollup_data)
         

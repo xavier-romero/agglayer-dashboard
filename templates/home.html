@@ -299,67 +299,48 @@ cast call --rpc-url $RPC_URL $ROLLUP_MANAGER "pol()"</code></pre>
                                         {% endif %}
                                         
                                         <!-- Multisig Information Section -->
-                                        {% if rollup.rollupSignersCount is defined %}
+                                        {% if rollup.rollupVerifierType == 2 %}
                                         <div class="detail-item" style="grid-column: 1 / -1;">
-                                            <h6 style="margin: 10px 0 5px 0; color: #555; font-size: 0.9em; border-bottom: 1px solid #eee; padding-bottom: 3px;">👥 Multisig Information</h6>
-                                            <div class="details-grid" style="margin-top: 8px;">
-                                                <div class="detail-item">
-                                                    <span class="detail-label">Signer Count:</span>
-                                                    <span class="detail-value">{{ rollup.rollupSignersCount }}</span>
-                                                </div>
-                                                <div class="detail-item">
-                                                    <span class="detail-label">Threshold:</span>
-                                                    <span class="detail-value">
-                                                        <span style="background: #f0f8ff; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #e1e8ed;">{{ rollup.rollupThreshold }}</span>
-                                                        {% if not rollup.useDefaultSigners and rollup.hasAgchainManagerKey %}
-                                                        <span style="margin: 0 8px; color: #666; font-size: 0.9em;">→</span>
-                                                        <input 
-                                                            type="number" 
-                                                            id="newThreshold-{{ rollup.rollupID }}" 
-                                                            min="1" 
-                                                            max="{{ rollup.rollupSignersCount or 10 }}"
-                                                            value="{{ rollup.rollupThreshold }}"
-                                                            style="width: 50px; padding: 3px 6px; font-size: 0.85em; border: 2px solid #2196f3; border-radius: 4px; background: #fff8e1; font-weight: 500;">
-                                                        <button 
-                                                            id="updateThreshold-{{ rollup.rollupID }}"
-                                                            onclick="updateThreshold({{ rollup.rollupID }})"
-                                                            style="margin-left: 6px; padding: 4px 8px; font-size: 0.8em; border: 1px solid #1976d2; border-radius: 4px; cursor: pointer; background: #2196f3; color: white; font-weight: 500;">
-                                                            Update()
-                                                        </button>
-                                                        {% endif %}
-                                                    </span>
-                                                </div>
-                                                <div class="detail-item">
-                                                    <span class="detail-label">Use AgglGW signers:</span>
-                                                    <span class="detail-value">{{ rollup.useDefaultSigners | default("false") }}</span>
-                                                </div>
-                                                {% if rollup.rollupMultisigHash and rollup.rollupMultisigHash != "0x" %}
-                                                <div class="detail-item">
-                                                    <span class="detail-label">Multisig hash:</span>
-                                                    <span class="detail-value"><code class="program-vkey">{{ rollup.rollupMultisigHash }}</code></span>
-                                                </div>
-                                                {% endif %}
-                                                {% if rollup.rollupSigners and rollup.rollupSigners|length > 0 %}
-                                                <div class="detail-item" style="grid-column: 1 / -1;">
-                                                    <span class="detail-label">Signers:</span>
-                                                    <div class="detail-value">
-                                                        {% for signer in rollup.rollupSigners %}
-                                                            <div style="display: flex; align-items: center; margin-bottom: 4px; gap: 10px;">
-                                                                <code class="full-address">{{ signer.address }}</code>
-                                                                {% if signer.url and signer.url.strip() %}
-                                                                    <small style="color: #666;">
-                                                                        🔗 <a href="{{ signer.url }}" target="_blank" style="color: #1976d2; text-decoration: none;">{{ signer.url }}</a>
-                                                                    </small>
-                                                                {% endif %}
-                                                            </div>
-                                                        {% endfor %}
-                                                    </div>
-                                                </div>
-                                                {% endif %}
+                                            <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0 5px 0;">
+                                                <h6 style="margin: 0; color: #555; font-size: 0.9em;">👥 Multisig Information</h6>
+                                                <button 
+                                                    onclick="toggleMultisigInfo('{{ rollup.rollupID }}')" 
+                                                    style="padding: 2px 6px; font-size: 0.7em; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; background: #f8f9fa;">
+                                                    <span id="multisigArrow-{{ rollup.rollupID }}">▼</span>
+                                                </button>
+                                                <button 
+                                                    onclick="refreshMultisigInfo({{ rollup.rollupID }})" 
+                                                    style="padding: 2px 6px; font-size: 0.7em; border: 1px solid #2196f3; border-radius: 3px; cursor: pointer; background: #e3f2fd; color: #1976d2;">
+                                                    🔄
+                                                </button>
+                                            </div>
+                                            <div id="multisig-{{ rollup.rollupID }}" class="multisig-content" style="display: none; margin-top: 8px;">
+                                                <div style="font-size: 0.85em; color: #666; margin-bottom: 5px;">Loading multisig data...</div>
                                             </div>
                                         </div>
                                         {% endif %}
                                     </div>
+                                    
+                                    <!-- Certificate Information Section -->
+                                    <div class="detail-item" style="grid-column: 1 / -1; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <h6 style="margin: 0; color: #555; font-size: 0.9em;">📜 AggLayer Certificates</h6>
+                                            <button 
+                                                onclick="toggleCertificates('{{ rollup.rollupID }}')" 
+                                                style="padding: 2px 6px; font-size: 0.7em; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; background: #f8f9fa;">
+                                                <span id="certArrow-{{ rollup.rollupID }}">▼</span>
+                                            </button>
+                                            <button 
+                                                onclick="refreshCertificates({{ rollup.rollupID }})" 
+                                                style="padding: 2px 6px; font-size: 0.7em; border: 1px solid #2196f3; border-radius: 3px; cursor: pointer; background: #e3f2fd; color: #1976d2;">
+                                                🔄
+                                            </button>
+                                        </div>
+                                        <div id="certificates-{{ rollup.rollupID }}" class="certificates-content" style="display: none; margin-top: 10px;">
+                                            <div style="font-size: 0.85em; color: #666; margin-bottom: 5px;">Loading certificate data...</div>
+                                        </div>
+                                    </div>
+                                    
                                     <!-- Cast Commands Legend -->
                                     <div class="cast-commands-section">
                                         <div class="cast-commands-header" onclick="toggleCastCommands('rollup{{ rollup.rollupID }}')">
@@ -418,12 +399,6 @@ cast send --rpc-url $RPC_URL --private-key $PRIVATE_KEY $ROLLUP_CONTRACT "update
                                         </div>
                                     </div>
                                     
-                                    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
-                                        <a href="/rollup/{{ rollup.rollupID }}" 
-                                           style="display: inline-block; padding: 8px 16px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 0.9em;">
-                                            📋 View Details
-                                        </a>
-                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
@@ -1231,8 +1206,9 @@ async function toggleOptimisticMode(rollupId, currentState) {
         if (result.success) {
             // Show success message with transaction hash
             alert(`Successfully ${result.action}d optimistic mode! Transaction hash: ${result.tx_hash}`);
-            // Reload page to reflect new state
-            location.reload();
+            // Refresh multisig section (avoids full page reload, though optimistic mode field is outside this section)
+            await refreshMultisigInfo(rollupId);
+            // Note: For full optimistic mode field update visibility, consider refreshing entire rollup section in future
         } else {
             alert(`Failed to ${result.action} optimistic mode: ${result.error || 'Unknown error'}`);
         }
@@ -1276,8 +1252,15 @@ async function updateThreshold(rollupId) {
         if (result.success) {
             // Show success message with transaction hash
             alert(`Successfully updated threshold from ${result.old_threshold} to ${result.new_threshold}! Transaction hash: ${result.tx_hash}`);
-            // Reload page to reflect new state
-            location.reload();
+            // Refresh only the multisig section instead of full page reload
+            await refreshMultisigInfo(rollupId);
+            // Ensure multisig section is expanded to show updated data
+            const content = document.getElementById(`multisig-${rollupId}`);
+            const arrow = document.getElementById(`multisigArrow-${rollupId}`);
+            if (content && content.style.display === 'none') {
+                content.style.display = 'block';
+                if (arrow) arrow.textContent = '▲';
+            }
         } else {
             alert(`Failed to update threshold: ${result.detail || 'Unknown error'}`);
         }
@@ -1290,6 +1273,311 @@ async function updateThreshold(rollupId) {
         button.style.opacity = '1';
         button.textContent = 'Update()';
     }
+}
+
+function toggleCertificates(rollupId) {
+    const content = document.getElementById(`certificates-${rollupId}`);
+    const arrow = document.getElementById(`certArrow-${rollupId}`);
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        arrow.textContent = '▲';
+        // Auto-load certificates when first opened
+        if (content.innerHTML.includes('Loading certificate data...')) {
+            refreshCertificates(rollupId);
+        }
+    } else {
+        content.style.display = 'none';
+        arrow.textContent = '▼';
+    }
+}
+
+async function refreshCertificates(rollupId) {
+    const content = document.getElementById(`certificates-${rollupId}`);
+    const refreshBtn = event ? event.target : null;
+    
+    // Show loading state
+    content.innerHTML = '<div style="font-size: 0.85em; color: #666; margin-bottom: 5px;">🔄 Refreshing certificate data...</div>';
+    
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.style.opacity = '0.6';
+    }
+    
+    try {
+        const response = await fetch(`/rollup/${rollupId}/certificates`);
+        const data = await response.json();
+        
+        if (response.ok) {
+            content.innerHTML = renderCertificates(data);
+        } else {
+            content.innerHTML = '<div style="color: #f44336; font-size: 0.85em;">❌ Failed to load certificate data</div>';
+        }
+    } catch (error) {
+        content.innerHTML = '<div style="color: #f44336; font-size: 0.85em;">❌ Error loading certificates</div>';
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.style.opacity = '1';
+        }
+    }
+}
+
+function renderCertificates(data) {
+    if (!data.certificates) {
+        return '<div style="color: #666; font-size: 0.85em;">No AggLayer URL configured</div>';
+    }
+    
+    let html = '<div style="display: grid; gap: 15px;">';
+    
+    // Latest Known Certificate (blue)
+    if (data.certificates.latest_known) {
+        const cert = data.certificates.latest_known;
+        html += `
+            <div style="background: #e3f2fd; padding: 12px; border-radius: 6px; border-left: 4px solid #2196f3;">
+                <div style="font-weight: bold; color: #1976d2; margin-bottom: 8px; font-size: 0.9em;">📋 Latest Certificate (Any Status)</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.75em;">
+                    <!-- Left Column: Regular Data -->
+                    <div style="display: grid; gap: 6px;">
+                        <div><strong>Height:</strong> ${cert.height || 'N/A'}</div>
+                        <div><strong>Epoch:</strong> ${cert.epoch_number || 'N/A'}</div>
+                        <div><strong>Status:</strong> <span style="background: ${cert.status === 'Settled' ? '#4caf50' : cert.status === 'Pending' ? '#ff9800' : '#757575'}; color: white; padding: 1px 4px; border-radius: 2px; font-size: 0.9em;">${cert.status || 'Unknown'}</span></div>
+                        <div><strong>Cert Index:</strong> ${cert.certificate_index !== null && cert.certificate_index !== undefined ? cert.certificate_index : 'N/A'}</div>
+                        ${cert.settlement_block_number ? `<div><strong>Settlement Block:</strong> ${cert.settlement_block_number}</div>` : ''}
+                        ${cert.settlement_gas_used ? `<div><strong>Gas Used:</strong> ${cert.settlement_gas_used.toLocaleString()} gas</div>` : ''}
+                        ${cert.settlement_datetime ? `<div><strong>Settlement Time:</strong> ${cert.settlement_datetime}${cert.settlement_relative_time ? ` <span style="color: #666;">(${cert.settlement_relative_time})</span>` : ''}</div>` : ''}
+                    </div>
+                    <!-- Right Column: Hashes -->
+                    <div style="display: grid; gap: 6px;">
+                        <div><strong>Certificate ID:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.certificate_id || 'N/A'}</code></div>
+                        ${cert.settlement_tx_hash ? `<div><strong>Settlement TX:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.settlement_tx_hash}</code></div>` : ''}
+                        ${cert.prev_local_exit_root ? `<div><strong>Prev Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.prev_local_exit_root}</code></div>` : ''}
+                        ${cert.new_local_exit_root ? `<div><strong>New Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.new_local_exit_root}</code></div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Latest Settled Certificate (green)
+    if (data.certificates.settled) {
+        const cert = data.certificates.settled;
+        html += `
+            <div style="background: #e8f5e8; padding: 12px; border-radius: 6px; border-left: 4px solid #4caf50;">
+                <div style="font-weight: bold; color: #2e7d32; margin-bottom: 8px; font-size: 0.9em;">🟢 Latest Settled Certificate</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.75em;">
+                    <!-- Left Column: Regular Data -->
+                    <div style="display: grid; gap: 6px;">
+                        <div><strong>Height:</strong> ${cert.height || 'N/A'}</div>
+                        <div><strong>Epoch:</strong> ${cert.epoch_number || 'N/A'}</div>
+                        <div><strong>Cert Index:</strong> ${cert.certificate_index !== null && cert.certificate_index !== undefined ? cert.certificate_index : 'N/A'}</div>
+                        <div><strong>Settlement Block:</strong> ${cert.settlement_block_number || 'N/A'}</div>
+                        <div><strong>Gas Used:</strong> ${cert.settlement_gas_used ? cert.settlement_gas_used.toLocaleString() + ' gas' : 'N/A'}</div>
+                        <div><strong>Network ID:</strong> ${cert.network_id || 'N/A'}</div>
+                        <div><strong>Settlement Time:</strong> ${cert.settlement_datetime || 'N/A'}${cert.settlement_relative_time ? ` <span style="color: #666;">(${cert.settlement_relative_time})</span>` : ''}</div>
+                    </div>
+                    <!-- Right Column: Hashes -->
+                    <div style="display: grid; gap: 6px;">
+                        <div><strong>Certificate ID:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.certificate_id || 'N/A'}</code></div>
+                        <div><strong>Settlement TX:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.settlement_tx_hash || 'N/A'}</code></div>
+                        <div><strong>Prev Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.prev_local_exit_root || 'N/A'}</code></div>
+                        <div><strong>New Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.new_local_exit_root || 'N/A'}</code></div>
+                        ${cert.settlement_block_hash ? `<div><strong>Settlement Block Hash:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.settlement_block_hash}</code></div>` : ''}
+                        ${cert.settlement_l1_info_root ? `<div><strong>L1 Info Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${cert.settlement_l1_info_root}</code></div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Previous Settlement Event (gray)
+    if (data.recentSettlements && data.recentSettlements.length > 0) {
+        const settlement = data.recentSettlements[0];
+        html += `
+            <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; border-left: 4px solid #757575;">
+                <div style="font-weight: bold; color: #424242; margin-bottom: 8px; font-size: 0.9em;">📜 Previous Settlement Event</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.75em;">
+                    <!-- Left Column: Regular Data -->
+                    <div style="display: grid; gap: 6px;">
+                        <div><strong>Settlement Block:</strong> ${settlement.block_number || 'N/A'}</div>
+                        <div><strong>Rollup ID:</strong> ${settlement.rollup_id || 'N/A'}</div>
+                        <div><strong>Gas Used:</strong> ${settlement.settlement_gas_used ? settlement.settlement_gas_used.toLocaleString() + ' gas' : 'N/A'}</div>
+                        <div><strong>Timestamp:</strong> ${settlement.timestamp || 'N/A'}</div>
+                        <div><strong>Settlement Time:</strong> ${settlement.datetime || 'N/A'}${settlement.relative_time ? ` <span style="color: #666;">(${settlement.relative_time})</span>` : ''}</div>
+                    </div>
+                    <!-- Right Column: Hashes -->
+                    <div style="display: grid; gap: 6px;">
+                        <div><strong>Trusted Aggregator:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.trusted_aggregator || 'N/A'}</code></div>
+                        <div><strong>Transaction Hash:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.transaction_hash || 'N/A'}</code></div>
+                        <div><strong>Prev Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.prev_local_exit_root || 'N/A'}</code></div>
+                        <div><strong>New Local Exit Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.new_local_exit_root || 'N/A'}</code></div>
+                        <div><strong>Prev Pessimistic Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.prev_pessimistic_root || 'N/A'}</code></div>
+                        <div><strong>New Pessimistic Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.new_pessimistic_root || 'N/A'}</code></div>
+                        ${settlement.l1_info_root ? `<div><strong>L1 Info Root:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.l1_info_root}</code></div>` : ''}
+                        ${settlement.settlement_block_hash ? `<div><strong>Settlement Block Hash:</strong><br><code style="font-size: 0.65em; word-break: break-all; background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 2px;">${settlement.settlement_block_hash}</code></div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    if (!data.certificates.latest_known && !data.certificates.settled && (!data.recentSettlements || data.recentSettlements.length === 0)) {
+        return '<div style="color: #666; font-size: 0.85em;">No certificate data available</div>';
+    }
+    
+    return html;
+}
+
+function toggleMultisigInfo(rollupId) {
+    const content = document.getElementById(`multisig-${rollupId}`);
+    const arrow = document.getElementById(`multisigArrow-${rollupId}`);
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        arrow.textContent = '▲';
+        // Auto-load multisig info when first opened
+        if (content.innerHTML.includes('Loading multisig data...')) {
+            refreshMultisigInfo(rollupId);
+        }
+    } else {
+        content.style.display = 'none';
+        arrow.textContent = '▼';
+    }
+}
+
+async function refreshMultisigInfo(rollupId) {
+    const content = document.getElementById(`multisig-${rollupId}`);
+    const refreshBtn = event ? event.target : null;
+    
+    // Show loading state
+    const originalContent = content.innerHTML;
+    content.innerHTML = '<div style="padding: 10px; font-size: 0.85em; color: #666;">🔄 Refreshing multisig data...</div>';
+    
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.style.opacity = '0.6';
+    }
+    
+    try {
+        const response = await fetch(`/rollup/${rollupId}/multisig`);
+        const data = await response.json();
+        
+        if (response.ok) {
+            content.innerHTML = renderMultisigInfo(data);
+        } else {
+            content.innerHTML = '<div style="color: #f44336; font-size: 0.85em;">❌ Failed to load multisig data</div>';
+        }
+    } catch (error) {
+        content.innerHTML = '<div style="color: #f44336; font-size: 0.85em;">❌ Error loading multisig data</div>';
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.style.opacity = '1';
+        }
+    }
+}
+
+function renderMultisigInfo(data) {
+    if (!data.rollupSignersCount && data.rollupSignersCount !== 0) {
+        return '<div style="color: #666; font-size: 0.85em;">No multisig data available</div>';
+    }
+    
+    let html = '<div class="details-grid">';
+    
+    // Signer Count
+    html += `
+        <div class="detail-item">
+            <span class="detail-label">Signer Count:</span>
+            <span class="detail-value">${data.rollupSignersCount || 0}</span>
+        </div>
+    `;
+    
+    // Threshold
+    html += `
+        <div class="detail-item">
+            <span class="detail-label">Threshold:</span>
+            <span class="detail-value">
+                <span style="background: #f0f8ff; padding: 2px 6px; border-radius: 3px; font-weight: bold; border: 1px solid #e1e8ed;">${data.rollupThreshold || 0}</span>
+    `;
+    
+    // Add threshold update controls if applicable
+    if (!data.useDefaultSigners && data.hasAgchainManagerKey) {
+        html += `
+                <span style="margin: 0 8px; color: #666; font-size: 0.9em;">→</span>
+                <input 
+                    type="number" 
+                    id="newThreshold-${data.rollupID}" 
+                    min="1" 
+                    max="${data.rollupSignersCount || 10}"
+                    value="${data.rollupThreshold || 0}"
+                    style="width: 50px; padding: 3px 6px; font-size: 0.85em; border: 2px solid #2196f3; border-radius: 4px; background: #fff8e1; font-weight: 500;">
+                <button 
+                    id="updateThreshold-${data.rollupID}"
+                    onclick="updateThreshold(${data.rollupID})"
+                    style="margin-left: 6px; padding: 4px 8px; font-size: 0.8em; border: 1px solid #1976d2; border-radius: 4px; cursor: pointer; background: #2196f3; color: white; font-weight: 500;">
+                    Update()
+                </button>
+        `;
+    }
+    
+    html += `
+            </span>
+        </div>
+    `;
+    
+    // Use AgglGW signers
+    html += `
+        <div class="detail-item">
+            <span class="detail-label">Use AgglGW signers:</span>
+            <span class="detail-value">${data.useDefaultSigners || false}</span>
+        </div>
+    `;
+    
+    // Multisig hash
+    if (data.rollupMultisigHash && data.rollupMultisigHash !== "0x") {
+        html += `
+            <div class="detail-item">
+                <span class="detail-label">Multisig hash:</span>
+                <span class="detail-value"><code class="program-vkey">${data.rollupMultisigHash}</code></span>
+            </div>
+        `;
+    }
+    
+    // Signers
+    if (data.rollupSigners && data.rollupSigners.length > 0) {
+        html += `
+            <div class="detail-item" style="grid-column: 1 / -1;">
+                <span class="detail-label">Signers:</span>
+                <div class="detail-value">
+        `;
+        
+        data.rollupSigners.forEach(signer => {
+            html += `
+                <div style="display: flex; align-items: center; margin-bottom: 4px; gap: 10px;">
+                    <code class="full-address">${signer.address}</code>
+            `;
+            
+            if (signer.url && signer.url.trim()) {
+                html += `
+                    <small style="color: #666;">
+                        🔗 <a href="${signer.url}" target="_blank" style="color: #1976d2; text-decoration: none;">${signer.url}</a>
+                    </small>
+                `;
+            }
+            
+            html += '</div>';
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    return html;
 }
 </script>
 {% endblock %}
